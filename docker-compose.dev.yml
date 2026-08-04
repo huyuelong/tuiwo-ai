@@ -19,6 +19,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      args:
+        # 避免国内服务器访问 proxy.golang.org 超时
+        GOPROXY: https://goproxy.cn,direct
+        GOSUMDB: sum.golang.google.cn
     image: new-api-dev:local
     container_name: new-api-dev
     restart: unless-stopped

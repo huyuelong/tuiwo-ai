@@ -20,6 +20,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 避免国内服务器访问 proxy.golang.org 超时
+        GOPROXY: https://goproxy.cn,direct
+        GOSUMDB: sum.golang.google.cn
     image: tuiwo-ai:local
     container_name: new-api
     restart: always
