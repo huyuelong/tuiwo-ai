@@ -121,6 +121,12 @@ func storeTaskRequest(c *gin.Context, info *RelayInfo, action string, requestObj
 	info.Action = action
 	c.Set("task_request", requestObj)
 }
+
+// UpdateTaskRequest 更新 context 中缓存的任务提交体（例如提交前重签媒体 URL）。
+func UpdateTaskRequest(c *gin.Context, requestObj TaskSubmitReq) {
+	c.Set("task_request", requestObj)
+}
+
 func GetTaskRequest(c *gin.Context) (TaskSubmitReq, error) {
 	v, exists := c.Get("task_request")
 	if !exists {
@@ -149,6 +155,10 @@ func validateTaskDurationBounds(req TaskSubmitReq) *dto.TaskError {
 	seconds := req.Duration
 	if seconds == 0 && req.Seconds != "" {
 		seconds, _ = strconv.Atoi(req.Seconds)
+	}
+	// -1：部分上游（如 wan3.0-video）表示智能时长；由适配器处理预扣上限
+	if seconds == -1 {
+		return nil
 	}
 	if seconds < 0 || seconds > MaxTaskDurationSeconds {
 		return createTaskError(fmt.Errorf("seconds must be between 1 and %d", MaxTaskDurationSeconds), "invalid_seconds", http.StatusBadRequest, true)

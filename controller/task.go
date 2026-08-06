@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,7 @@ func GetAllTask(c *gin.Context) {
 		TaskID:         c.Query("task_id"),
 		Status:         c.Query("status"),
 		Action:         c.Query("action"),
+		TaskType:       c.Query("task_type"),
 		StartTimestamp: startTimestamp,
 		EndTimestamp:   endTimestamp,
 		ChannelID:      c.Query("channel_id"),
@@ -49,6 +51,7 @@ func GetUserTask(c *gin.Context) {
 		TaskID:         c.Query("task_id"),
 		Status:         c.Query("status"),
 		Action:         c.Query("action"),
+		TaskType:       c.Query("task_type"),
 		StartTimestamp: startTimestamp,
 		EndTimestamp:   endTimestamp,
 	}
@@ -82,7 +85,9 @@ func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
 				task.Username = user.Username
 			}
 		}
-		result[i] = relay.TaskModel2Dto(task)
+		item := relay.TaskModel2Dto(task)
+		item.ResultURL = service.ResolveTaskResultURL(nil, task)
+		result[i] = item
 	}
 	return result
 }

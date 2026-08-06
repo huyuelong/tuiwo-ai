@@ -56,7 +56,8 @@ func shouldPromoteMediaObjectKey(objectKey, uploadPrefix, taskAssetPrefix string
 }
 
 // PromoteTaskMediaAssets 将 media-uploads 下的参考媒体复制到 media-task-assets，
-// 并重写 metadata.input.media[].object_key。S3 不可用或复制失败时记录日志并返回原始 input。
+// 并重写 metadata.input.media[].object_key。
+// 单条复制失败时保留该条原 object_key 并继续；S3 不可用时返回原始 input。
 func PromoteTaskMediaAssets(ctx context.Context, userId int, taskID, inputJSON string) (string, error) {
 	inputJSON = strings.TrimSpace(inputJSON)
 	if inputJSON == "" {
@@ -107,13 +108,13 @@ func PromoteTaskMediaAssets(ctx context.Context, userId int, taskID, inputJSON s
 		}
 		dstKey, keyErr := GenerateMediaTaskAssetObjectKey(userId, taskID, i, ext)
 		if keyErr != nil {
-			logger.LogError(ctx, fmt.Sprintf("promote task media assets key generation failed: %v", keyErr))
-			return inputJSON, nil
+			logger.LogError(ctx, fmt.Sprintf("promote task media assets key generation failed for %q: %v", srcKey, keyErr))
+			continue
 		}
 
 		if copyErr := client.Copy(ctx, srcKey, dstKey); copyErr != nil {
 			logger.LogError(ctx, fmt.Sprintf("promote task media assets copy %q -> %q failed: %v", srcKey, dstKey, copyErr))
-			return inputJSON, nil
+			continue
 		}
 
 		item["object_key"] = dstKey

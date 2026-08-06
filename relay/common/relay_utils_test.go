@@ -112,6 +112,10 @@ func TestTaskDurationBounds(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "smart duration -1 is allowed at shared validation",
+			body: `{"model":"wan3.0-video","prompt":"a cat","duration":-1}`,
+		},
+		{
 			name: "normal duration is accepted",
 			body: `{"model":"sora-2","prompt":"a cat","seconds":"8"}`,
 		},

@@ -413,10 +413,12 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 		return
 	}
 
-	// 通用 TaskDto 格式
+	// 通用 TaskDto 格式；优先签发自有转存对象的预签名 URL
+	taskDto := TaskModel2Dto(originTask)
+	taskDto.ResultURL = service.ResolveTaskResultURL(c.Request.Context(), originTask)
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: taskDto,
 	})
 	if err != nil {
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
@@ -559,6 +561,7 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		ChannelId:  task.ChannelId,
 		Quota:      task.Quota,
 		Action:     task.Action,
+		TaskType:   task.TaskType,
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
 		ResultURL:  task.GetResultURL(),

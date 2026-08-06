@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   Box,
+  Clapperboard,
   CreditCard,
   FileText,
   FlaskConical,
@@ -58,6 +59,11 @@ export function useSidebarData(): SidebarData {
             title: t('Playground'),
             url: '/playground',
             icon: FlaskConical,
+          },
+          {
+            title: t('Video Generation'),
+            url: '/playground/video',
+            icon: Clapperboard,
           },
           {
             title: t('Chat'),

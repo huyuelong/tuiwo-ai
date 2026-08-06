@@ -44,6 +44,14 @@ services:
       - ERROR_LOG_ENABLED=true # 是否启用错误日志记录 (Whether to enable error log recording)
       - BATCH_UPDATE_ENABLED=true  # 是否启用批量更新 (Whether to enable batch update)
       - NODE_NAME=new-api-node-1  # 节点名称，用于审计日志中标识节点身份；多节点/容器部署时建议设置 (Node name used in audit logs; recommended when running multiple instances or in containers)
+      - MEDIA_UPLOAD_ENABLED=true
+      - MEDIA_S3_BUCKET=${MEDIA_S3_BUCKET:-media-uploads}
+      - MEDIA_S3_ENDPOINT=http://minio:9000
+      - MEDIA_S3_PUBLIC_ENDPOINT=${MEDIA_S3_PUBLIC_ENDPOINT:-http://localhost:9100}
+      - MEDIA_S3_REGION=us-east-1
+      - MEDIA_S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MEDIA_S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MEDIA_S3_FORCE_PATH_STYLE=true
 #      - STREAMING_TIMEOUT=300  # 流模式无响应超时时间，单位秒，默认120秒，如果出现空补全可以尝试改为更大值 （Streaming timeout in seconds, default is 120s. Increase if experiencing empty completions）
 #      - RELAY_IDLE_CONN_TIMEOUT=90  # Relay HTTP 客户端空闲连接超时时间，单位秒，默认跟随 Go 标准库，设置为0表示不限制 (Relay HTTP client idle keep-alive timeout in seconds, defaults to Go standard library; set 0 to disable)
 #      - SESSION_SECRET=random_string  # 多机部署时设置，必须修改这个随机字符串！！ （multi-node deployment, set this to a random string!!!!!!!）
@@ -63,6 +71,7 @@ services:
     depends_on:
       - redis
       - postgres
+      - minio-init
 #      - mysql  # Uncomment if using MySQL
 #      - clickhouse  # Uncomment if using ClickHouse for LOG_SQL_DSN
     networks:
@@ -95,6 +104,49 @@ services:
       - new-api-network
 #    ports:
 #      - "5432:5432"  # Uncomment if you need to access PostgreSQL from outside Docker
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MEDIA_S3_CORS_ALLOW_ORIGIN:-http://localhost:3000,http://localhost:5173}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\" &&
+      mc mb --ignore-existing \"local/$${MEDIA_S3_BUCKET}\" &&
+      mc anonymous set none \"local/$${MEDIA_S3_BUCKET}\" &&
+      (mc ilm rule remove --all --force \"local/$${MEDIA_S3_BUCKET}\" || true) &&
+      mc ilm rule add --expire-days 7 --prefix \"media-uploads/\" \"local/$${MEDIA_S3_BUCKET}\"
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MEDIA_S3_BUCKET: ${MEDIA_S3_BUCKET:-media-uploads}
+    networks:
+      - new-api-network
 
 #  mysql:
 #    image: mysql:8.2
@@ -129,6 +181,7 @@ services:
 
 volumes:
   pg_data:
+  minio_data:
 #  mysql_data:
 #  clickhouse_data:
 

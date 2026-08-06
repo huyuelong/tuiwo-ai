@@ -56,6 +56,7 @@ type Task struct {
 	ChannelId  int                   `json:"channel_id" gorm:"index"`
 	Quota      int                   `json:"quota"`
 	Action     string                `json:"action" gorm:"type:varchar(40);index"` // 任务类型, song, lyrics, description-mode
+	TaskType   string                `json:"task_type" gorm:"type:varchar(20);index"` // video / image / music；旧数据为空
 	Status     TaskStatus            `json:"status" gorm:"type:varchar(20);index"` // 任务状态
 	FailReason string                `json:"fail_reason"`
 	SubmitTime int64                 `json:"submit_time" gorm:"index"`
@@ -101,9 +102,10 @@ func (m Properties) Value() (driver.Value, error) {
 }
 
 type TaskPrivateData struct {
-	Key            string `json:"key,omitempty"`
-	UpstreamTaskID string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
-	ResultURL      string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
+	Key             string `json:"key,omitempty"`
+	UpstreamTaskID  string `json:"upstream_task_id,omitempty"` // 上游真实 task ID
+	ResultURL       string `json:"result_url,omitempty"`       // 任务成功后的结果 URL（视频地址等）
+	StoredResultKey string `json:"stored_result_key,omitempty"` // 自有对象存储中的结果键（MinIO/S3）
 	// 计费上下文：用于异步退款/差额结算（轮询阶段读取）
 	BillingSource  string              `json:"billing_source,omitempty"`  // "wallet" 或 "subscription"
 	SubscriptionId int                 `json:"subscription_id,omitempty"` // 订阅 ID，用于订阅退款
@@ -169,9 +171,26 @@ type SyncTaskQueryParams struct {
 	UserID         string
 	Action         string
 	Status         string
+	TaskType       string
 	StartTimestamp int64
 	EndTimestamp   int64
 	UserIDs        []int
+}
+
+// ResolveTaskType 根据任务 action 推断稳定类型，供写入 task_type 使用。
+func ResolveTaskType(action string) string {
+	switch action {
+	case constant.SunoActionMusic, constant.SunoActionLyrics:
+		return constant.TaskTypeMusic
+	case constant.TaskActionGenerate,
+		constant.TaskActionTextGenerate,
+		constant.TaskActionFirstTailGenerate,
+		constant.TaskActionReferenceGenerate,
+		constant.TaskActionRemix:
+		return constant.TaskTypeVideo
+	default:
+		return ""
+	}
 }
 
 func InitTask(platform constant.TaskPlatform, relayInfo *commonRelay.RelayInfo) *Task {
@@ -229,6 +248,9 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	if queryParams.Status != "" {
 		query = query.Where("status = ?", queryParams.Status)
 	}
+	if queryParams.TaskType != "" {
+		query = query.Where("task_type = ?", queryParams.TaskType)
+	}
 	if queryParams.Platform != "" {
 		query = query.Where("platform = ?", queryParams.Platform)
 	}
@@ -277,6 +299,9 @@ func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*
 	}
 	if queryParams.Status != "" {
 		query = query.Where("status = ?", queryParams.Status)
+	}
+	if queryParams.TaskType != "" {
+		query = query.Where("task_type = ?", queryParams.TaskType)
 	}
 	if queryParams.StartTimestamp != 0 {
 		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
@@ -472,6 +497,9 @@ func TaskCountAllTasks(queryParams SyncTaskQueryParams) int64 {
 	if queryParams.Status != "" {
 		query = query.Where("status = ?", queryParams.Status)
 	}
+	if queryParams.TaskType != "" {
+		query = query.Where("task_type = ?", queryParams.TaskType)
+	}
 	if queryParams.StartTimestamp != 0 {
 		query = query.Where("submit_time >= ?", queryParams.StartTimestamp)
 	}
@@ -494,6 +522,9 @@ func TaskCountAllUserTask(userId int, queryParams SyncTaskQueryParams) int64 {
 	}
 	if queryParams.Status != "" {
 		query = query.Where("status = ?", queryParams.Status)
+	}
+	if queryParams.TaskType != "" {
+		query = query.Where("task_type = ?", queryParams.TaskType)
 	}
 	if queryParams.Platform != "" {
 		query = query.Where("platform = ?", queryParams.Platform)

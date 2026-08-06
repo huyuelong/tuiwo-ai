@@ -84,8 +84,9 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// check path is /pg/chat/completions
-				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
+				// 游乐场对话 / 视频生成提交：允许请求体指定 group
+				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") ||
+					(strings.HasPrefix(c.Request.URL.Path, "/pg/video/generations") && c.Request.Method == http.MethodPost) {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
 					if err != nil {
@@ -319,7 +320,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			modelRequest.Model = getTaskOriginModelName(c)
 		}
 		c.Set("relay_mode", relayMode)
-	} else if strings.Contains(c.Request.URL.Path, "/v1/video/generations") {
+	} else if strings.Contains(c.Request.URL.Path, "/video/generations") {
 		relayMode := relayconstant.RelayModeUnknown
 		if c.Request.Method == http.MethodPost {
 			req, err := getModelFromRequest(c)
@@ -399,8 +400,9 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		}
 		c.Set("relay_mode", relayMode)
 	}
-	if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
-		// playground chat completions
+	if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") ||
+		(strings.HasPrefix(c.Request.URL.Path, "/pg/video/generations") && c.Request.Method == http.MethodPost) {
+		// playground：从请求读取 model / group
 		req, err := getModelFromRequest(c)
 		if err != nil {
 			return nil, false, err

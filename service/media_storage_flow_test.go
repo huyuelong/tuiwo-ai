@@ -20,15 +20,16 @@ type mediaCopyCall struct {
 }
 
 type fakeMediaS3 struct {
-	putURL    string
-	getURL    string
-	meta      *mediaObjectMeta
-	headErr   error
-	putErr    error
-	putKeys   []string
-	deleted   []string
-	copyErr   error
-	copyCalls []mediaCopyCall
+	putURL       string
+	getURL       string
+	meta         *mediaObjectMeta
+	headErr      error
+	putErr       error
+	putKeys      []string
+	deleted      []string
+	copyErr      error
+	copyErrBySrc map[string]error
+	copyCalls    []mediaCopyCall
 }
 
 func (f *fakeMediaS3) PresignPut(ctx context.Context, key, contentType string, expiry time.Duration) (string, error) {
@@ -61,6 +62,11 @@ func (f *fakeMediaS3) Delete(ctx context.Context, key string) error {
 
 func (f *fakeMediaS3) Copy(ctx context.Context, srcKey, dstKey string) error {
 	f.copyCalls = append(f.copyCalls, mediaCopyCall{src: srcKey, dst: dstKey})
+	if f.copyErrBySrc != nil {
+		if err, ok := f.copyErrBySrc[srcKey]; ok && err != nil {
+			return err
+		}
+	}
 	if f.copyErr != nil {
 		return f.copyErr
 	}
@@ -153,4 +159,51 @@ func TestCompleteMediaUploadRejectsOversizedObjectAndDeletes(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, row)
 	assert.Equal(t, model.MediaUploadStatusFailed, row.Status)
+}
+
+func TestCompleteMediaUploadRejectsWhenDailyQuotaExceeded(t *testing.T) {
+	setupMediaUploadDB(t)
+	ResetMediaStorageConfigForTest()
+	t.Cleanup(ResetMediaStorageConfigForTest)
+
+	t.Setenv("MEDIA_UPLOAD_ENABLED", "true")
+	t.Setenv("MEDIA_S3_BUCKET", "bucket")
+	t.Setenv("MEDIA_S3_ACCESS_KEY", "ak")
+	t.Setenv("MEDIA_S3_SECRET_KEY", "sk")
+	t.Setenv("MEDIA_UPLOAD_DAILY_BYTES", "200")
+
+	fake := &fakeMediaS3{
+		putURL: "https://s3.example/put",
+		getURL: "https://s3.example/get",
+		meta:   &mediaObjectMeta{ContentType: "image/png", SizeBytes: 100},
+	}
+	SetMediaS3ClientForTest(fake, nil)
+
+	initResp, err := InitiateMediaUpload(t.Context(), 7, dto.MediaUploadInitiateRequest{
+		Filename:    "frame.png",
+		ContentType: "image/png",
+		SizeBytes:   100,
+	})
+	require.NoError(t, err)
+
+	now := time.Now().Unix()
+	require.NoError(t, model.CreateMediaUpload(&model.MediaUpload{
+		UploadId:     "other-completed",
+		UserId:       7,
+		ObjectKey:    "media-uploads/7/other.png",
+		Filename:     "other.png",
+		ContentType:  "image/png",
+		Category:     "image",
+		DeclaredSize: 150,
+		ActualSize:   150,
+		Status:       model.MediaUploadStatusCompleted,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		CompletedAt:  now,
+	}))
+
+	_, err = CompleteMediaUpload(t.Context(), 7, initResp.UploadId)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrMediaUploadQuota)
+	assert.Equal(t, []string{initResp.ObjectKey}, fake.deleted)
 }

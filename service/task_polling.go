@@ -581,6 +581,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			logger.LogWarn(ctx, fmt.Sprintf("Task %s CAS lost or no-op update, skip billing", task.TaskID))
 			shouldRefund = false
 			shouldSettle = false
+		} else if task.Status == model.TaskStatusSuccess {
+			// CAS 获胜后再异步转存，失败不影响任务终态与计费
+			ScheduleArchiveTaskResult(task.ID)
 		}
 	} else if !snap.Equal(task.Snapshot()) {
 		if _, err := task.UpdateWithStatus(snap.Status); err != nil {

@@ -54,13 +54,15 @@ type AliVideoInput struct {
 
 // AliVideoParameters 视频参数
 type AliVideoParameters struct {
-	Resolution   string `json:"resolution,omitempty"`    // 分辨率: 480P/720P/1080P（图生视频、首尾帧生视频）
-	Size         string `json:"size,omitempty"`          // 尺寸: 如 "832*480"（文生视频）
-	Duration     int    `json:"duration,omitempty"`      // 时长: 3-10秒
-	PromptExtend bool   `json:"prompt_extend,omitempty"` // 是否开启prompt智能改写
-	Watermark    bool   `json:"watermark,omitempty"`     // 是否添加水印
-	Audio        *bool  `json:"audio,omitempty"`         // 是否添加音频（wan2.5）
-	Seed         int    `json:"seed,omitempty"`          // 随机数种子
+	Resolution     string `json:"resolution,omitempty"`      // 分辨率: 480P/720P/1080P
+	Size           string `json:"size,omitempty"`            // 尺寸: 如 "832*480"（文生视频）
+	Duration       int    `json:"duration,omitempty"`        // 时长；wan3 为 2-30
+	PromptExtend   bool   `json:"prompt_extend,omitempty"`   // 是否开启prompt智能改写（wan2）
+	Watermark      bool   `json:"watermark,omitempty"`       // 是否添加水印
+	Audio          *bool  `json:"audio,omitempty"`           // 是否添加音频
+	Seed           *int   `json:"seed,omitempty"`            // 随机数种子 [0, 2147483647]；未设置不传
+	Ratio          string `json:"ratio,omitempty"`           // 长宽比（wan3）：16:9 / adaptive 等
+	EnableThinking *bool  `json:"enable_thinking,omitempty"` // 深度思考（wan3）；file/link 依赖
 }
 
 // AliVideoResponse 阿里通义万相响应
@@ -130,9 +132,34 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	a.apiKey = info.ApiKey
 }
 
+const aliConvertedRequestKey = "ali_converted_video_request"
+
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *taskdto.TaskError) {
 	// ValidateMultipartDirect 负责解析并将原始 TaskSubmitReq 存入 context
-	return relaycommon.ValidateMultipartDirect(c, info)
+	if taskErr = relaycommon.ValidateMultipartDirect(c, info); taskErr != nil {
+		return taskErr
+	}
+
+	taskReq, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+	}
+	if err := service.ResolveTaskSubmitMediaURLs(c.Request.Context(), info.UserId, &taskReq); err != nil {
+		return service.TaskErrorWrapperLocal(err, "media_presign_failed", http.StatusBadRequest)
+	}
+	relaycommon.UpdateTaskRequest(c, taskReq)
+	// 全模型走 convert，避免非法参数漏过校验后在 EstimateBilling 静默少扣
+	aliReq, err := a.convertToAliRequest(info, taskReq)
+	if err != nil {
+		return service.TaskErrorWrapperLocal(err, "invalid_request", http.StatusBadRequest)
+	}
+	c.Set(aliConvertedRequestKey, aliReq)
+	if isWan30Model(taskReq.Model) {
+		if action := resolveWan30Action(aliReq); action != "" {
+			info.Action = action
+		}
+	}
+	return nil
 }
 
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
@@ -148,12 +175,7 @@ func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info
 }
 
 func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
-	taskReq, err := relaycommon.GetTaskRequest(c)
-	if err != nil {
-		return nil, errors.Wrap(err, "get_task_request_failed")
-	}
-
-	aliReq, err := a.convertToAliRequest(info, taskReq)
+	aliReq, err := a.resolveAliRequest(c, info)
 	if err != nil {
 		return nil, errors.Wrap(err, "convert_to_ali_request_failed")
 	}
@@ -164,6 +186,31 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 		return nil, errors.Wrap(err, "marshal_ali_request_failed")
 	}
 	return bytes.NewReader(bodyBytes), nil
+}
+
+func (a *TaskAdaptor) resolveAliRequest(c *gin.Context, info *relaycommon.RelayInfo) (*AliVideoRequest, error) {
+	if cached, ok := c.Get(aliConvertedRequestKey); ok {
+		if aliReq, ok := cached.(*AliVideoRequest); ok && aliReq != nil {
+			return aliReq, nil
+		}
+	}
+	taskReq, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return nil, err
+	}
+	aliReq, err := a.convertToAliRequest(info, taskReq)
+	if err != nil {
+		return nil, err
+	}
+	c.Set(aliConvertedRequestKey, aliReq)
+	return aliReq, nil
+}
+
+// 转换/倍率失败时按上限预扣，避免少扣
+func aliFailClosedBillingRatios() map[string]float64 {
+	return map[string]float64{
+		"seconds": float64(relaycommon.MaxTaskDurationSeconds),
+	}
 }
 
 var (
@@ -236,6 +283,11 @@ func ProcessAliOtherRatios(aliReq *AliVideoRequest) (map[string]float64, error) 
 		"wan2.2-s2v": {
 			"480P": 1,
 			"720P": 0.9 / 0.5,
+		},
+		"wan3.0-video": {
+			"480P":  1,
+			"720P":  2,
+			"1080P": 4,
 		},
 	}
 	var resolution string
@@ -360,7 +412,7 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 			ImgURL: firstTaskImage(req),
 		},
 		Parameters: &AliVideoParameters{
-			PromptExtend: true, // 默认开启智能改写
+			PromptExtend: !isWan30Model(upstreamModel), // wan3 不传 prompt_extend
 			Watermark:    false,
 		},
 	}
@@ -381,8 +433,8 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 			}
 			aliReq.Parameters.Resolution = resolution
 		}
-	} else {
-		// 根据模型设置默认分辨率
+	} else if !isWan30Model(upstreamModel) {
+		// 根据模型设置默认分辨率（wan3 在 normalize 中设 1080P）
 		if strings.Contains(req.Model, "t2v") { // image to video
 			if strings.HasPrefix(req.Model, "wan2.5") {
 				aliReq.Parameters.Size = "1920*1080"
@@ -407,7 +459,7 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 	}
 
 	// 处理时长
-	if req.Duration > 0 {
+	if req.Duration != 0 {
 		aliReq.Parameters.Duration = req.Duration
 	} else if req.Seconds != "" {
 		seconds, err := strconv.Atoi(req.Seconds)
@@ -417,8 +469,14 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 			aliReq.Parameters.Duration = seconds
 		}
 	}
-	if aliReq.Parameters.Duration <= 0 {
-		aliReq.Parameters.Duration = 5 // 默认5秒
+	// wan3 的默认时长与非法值在 normalizeWan30Request 中处理，避免把 -1 改成 5
+	if !isWan30Model(upstreamModel) {
+		if aliReq.Parameters.Duration == -1 {
+			return nil, fmt.Errorf("%s does not support smart duration (-1)", upstreamModel)
+		}
+		if aliReq.Parameters.Duration <= 0 {
+			aliReq.Parameters.Duration = 5 // 默认5秒
+		}
 	}
 
 	// 从 metadata 中提取额外参数
@@ -440,6 +498,9 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 	if err := normalizeWan27I2VInput(aliReq, req); err != nil {
 		return nil, err
 	}
+	if err := normalizeWan30Request(aliReq, req); err != nil {
+		return nil, err
+	}
 
 	return aliReq, nil
 }
@@ -447,23 +508,24 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 // EstimateBilling 根据用户请求参数计算 OtherRatios（时长、分辨率等）。
 // 在 ValidateRequestAndSetAction 之后、价格计算之前调用。
 func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
-	taskReq, err := relaycommon.GetTaskRequest(c)
+	aliReq, err := a.resolveAliRequest(c, info)
 	if err != nil {
-		return nil
-	}
-
-	aliReq, err := a.convertToAliRequest(info, taskReq)
-	if err != nil {
-		return nil
+		return aliFailClosedBillingRatios()
 	}
 
 	// metadata can override Duration past standard request validation;
 	// cap it because it is used as a billing multiplier.
+	seconds := float64(min(aliReq.Parameters.Duration, relaycommon.MaxTaskDurationSeconds))
+	if isWan30Model(aliReq.Model) {
+		seconds = wan30BillingSeconds(aliReq.Parameters.Duration)
+	}
 	otherRatios := map[string]float64{
-		"seconds": float64(min(aliReq.Parameters.Duration, relaycommon.MaxTaskDurationSeconds)),
+		"seconds": seconds,
 	}
 	ratios, err := ProcessAliOtherRatios(aliReq)
 	if err != nil {
+		// 分辨率解析失败时按时长上限闭合，避免少扣
+		otherRatios["seconds"] = float64(relaycommon.MaxTaskDurationSeconds)
 		return otherRatios
 	}
 	for k, v := range ratios {
@@ -550,6 +612,48 @@ func (a *TaskAdaptor) GetModelList() []string {
 
 func (a *TaskAdaptor) GetChannelName() string {
 	return ChannelName
+}
+
+// AdjustBillingOnComplete 按 Ali 返回的实际时长（usage.duration）差额结算。
+func (a *TaskAdaptor) AdjustBillingOnComplete(task *model.Task, _ *relaycommon.TaskInfo) int {
+	if task == nil || len(task.Data) == 0 {
+		return 0
+	}
+	var aliResp AliVideoResponse
+	if err := common.Unmarshal(task.Data, &aliResp); err != nil {
+		return 0
+	}
+	if aliResp.Usage == nil {
+		return 0
+	}
+	actualSeconds := int(aliResp.Usage.Duration)
+	if actualSeconds <= 0 {
+		return 0
+	}
+	if actualSeconds > relaycommon.MaxTaskDurationSeconds {
+		actualSeconds = relaycommon.MaxTaskDurationSeconds
+	}
+	if actualSeconds < wan30MinDuration {
+		actualSeconds = wan30MinDuration
+	}
+
+	bc := task.PrivateData.BillingContext
+	if bc == nil || len(bc.OtherRatios) == 0 {
+		return 0
+	}
+	preSeconds, ok := bc.OtherRatios["seconds"]
+	if !ok || float64(actualSeconds) == preSeconds {
+		return 0
+	}
+
+	ratios := make(map[string]float64, len(bc.OtherRatios))
+	for key, value := range bc.OtherRatios {
+		ratios[key] = value
+	}
+	ratios["seconds"] = float64(actualSeconds)
+
+	actualQuota, _ := service.ComputeTaskQuotaFromBillingRatios(task, ratios)
+	return actualQuota
 }
 
 // ParseTaskResult 解析任务结果

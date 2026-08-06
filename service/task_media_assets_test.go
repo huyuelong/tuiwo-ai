@@ -71,7 +71,7 @@ func TestPromoteTaskMediaAssetsSkipsAlreadyPromotedKey(t *testing.T) {
 	assert.Empty(t, fake.copyCalls)
 }
 
-func TestPromoteTaskMediaAssetsCopyFailureReturnsOriginal(t *testing.T) {
+func TestPromoteTaskMediaAssetsCopyFailureKeepsOriginalKey(t *testing.T) {
 	ResetMediaStorageConfigForTest()
 	t.Cleanup(ResetMediaStorageConfigForTest)
 
@@ -84,6 +84,28 @@ func TestPromoteTaskMediaAssetsCopyFailureReturnsOriginal(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, input, out)
 	assert.Len(t, fake.copyCalls, 1)
+}
+
+func TestPromoteTaskMediaAssetsPartialCopyKeepsSuccessfulRewrites(t *testing.T) {
+	ResetMediaStorageConfigForTest()
+	t.Cleanup(ResetMediaStorageConfigForTest)
+
+	failSrc := "media-uploads/7/2026/08/06/b.png"
+	fake := &fakeMediaS3{
+		copyErrBySrc: map[string]error{
+			failSrc: errors.New("copy failed"),
+		},
+	}
+	SetMediaS3ClientForTest(fake, nil)
+	t.Cleanup(func() { SetMediaS3ClientForTest(nil, nil) })
+
+	input := `{"prompt":"x","metadata":{"input":{"media":[{"type":"first_frame","url":"https://x","object_key":"media-uploads/7/2026/08/06/a.png"},{"type":"last_frame","url":"https://y","object_key":"media-uploads/7/2026/08/06/b.png"}]}}}`
+	out, err := PromoteTaskMediaAssets(context.Background(), 7, "task_abc", input)
+	require.NoError(t, err)
+	assert.Contains(t, out, "media-task-assets/7/task_abc/0.png")
+	assert.Contains(t, out, failSrc)
+	assert.NotContains(t, out, "media-task-assets/7/task_abc/1.png")
+	assert.Len(t, fake.copyCalls, 2)
 }
 
 func TestPromoteTaskMediaAssetsS3DisabledReturnsOriginal(t *testing.T) {

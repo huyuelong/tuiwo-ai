@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,4 +69,32 @@ func TestPresignOwnedMediaKeysRejectsPathTraversal(t *testing.T) {
 	_, err := PresignOwnedMediaKeys(context.Background(), 7, []string{"media-task-assets/7/../8/task/0.png"})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrMediaUploadValidation)
+}
+
+func TestResolveTaskSubmitMediaURLsRewritesMediaURL(t *testing.T) {
+	setupPresignMediaTest(t)
+	expectedURL := "https://s3.example/fresh-get"
+	SetMediaS3ClientForTest(&fakeMediaS3{getURL: expectedURL}, nil)
+
+	objectKey := "media-uploads/7/2026/08/06/uuid.png"
+	req := &relaycommon.TaskSubmitReq{
+		Metadata: map[string]interface{}{
+			"input": map[string]interface{}{
+				"media": []interface{}{
+					map[string]interface{}{
+						"type":       "first_frame",
+						"url":        "https://expired.example/old",
+						"object_key": objectKey,
+					},
+				},
+			},
+		},
+	}
+
+	err := ResolveTaskSubmitMediaURLs(context.Background(), 7, req)
+	require.NoError(t, err)
+
+	media := req.Metadata["input"].(map[string]interface{})["media"].([]interface{})
+	item := media[0].(map[string]interface{})
+	assert.Equal(t, expectedURL, item["url"])
 }

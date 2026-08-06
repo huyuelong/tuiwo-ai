@@ -543,6 +543,20 @@ func CompleteMediaUpload(ctx context.Context, userId int, uploadId string) (*dto
 		return nil, fmt.Errorf("%w: object content type mismatch", ErrMediaUploadValidation)
 	}
 
+	// 完成时二次校验日额度：used 含本条 pending 的 declared，换成 actual 后再比
+	used, err := model.SumMediaUploadBytesForUserToday(userId)
+	if err != nil {
+		return nil, err
+	}
+	otherUsed := used - record.DeclaredSize
+	if otherUsed < 0 {
+		otherUsed = 0
+	}
+	if otherUsed > cfg.DailyBytes || meta.SizeBytes > cfg.DailyBytes-otherUsed {
+		_ = markMediaUploadFailedAndDelete(ctx, client, record)
+		return nil, ErrMediaUploadQuota
+	}
+
 	getURL, err := client.PresignGet(ctx, record.ObjectKey, mediaGetURLExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to presign get url: %w", err)

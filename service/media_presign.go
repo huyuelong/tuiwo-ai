@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 )
 
 const maxMediaPresignGetKeys = 40
@@ -64,4 +66,57 @@ func PresignOwnedMediaKeys(ctx context.Context, userId int, objectKeys []string)
 		urls[key] = signed
 	}
 	return urls, nil
+}
+
+// ResolveTaskSubmitMediaURLs 提交前用 object_key 重新签发 GET URL，写回 metadata.input.media[].url。
+func ResolveTaskSubmitMediaURLs(ctx context.Context, userId int, req *relaycommon.TaskSubmitReq) error {
+	if req == nil || req.Metadata == nil || userId <= 0 {
+		return nil
+	}
+	input, _ := req.Metadata["input"].(map[string]interface{})
+	if input == nil {
+		return nil
+	}
+	media, _ := input["media"].([]interface{})
+	if len(media) == 0 {
+		return nil
+	}
+
+	objectKeys := make([]string, 0, len(media))
+	mediaIndexes := make([]int, 0, len(media))
+	for i, item := range media {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		objectKey, _ := itemMap["object_key"].(string)
+		objectKey = strings.TrimSpace(objectKey)
+		if objectKey == "" {
+			continue
+		}
+		objectKeys = append(objectKeys, objectKey)
+		mediaIndexes = append(mediaIndexes, i)
+	}
+	if len(objectKeys) == 0 {
+		return nil
+	}
+
+	urls, err := PresignOwnedMediaKeys(ctx, userId, objectKeys)
+	if err != nil {
+		return err
+	}
+
+	for j, mediaIndex := range mediaIndexes {
+		itemMap, ok := media[mediaIndex].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		objectKey := objectKeys[j]
+		if signedURL := strings.TrimSpace(urls[objectKey]); signedURL != "" {
+			itemMap["url"] = signedURL
+		}
+	}
+	input["media"] = media
+	req.Metadata["input"] = input
+	return nil
 }

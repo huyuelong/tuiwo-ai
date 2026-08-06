@@ -152,6 +152,24 @@ func taskBillingContextPriceData(bc *model.TaskBillingContext) *types.PriceData 
 	return priceData
 }
 
+// ComputeTaskQuotaFromBillingRatios 根据 BillingContext 快照与给定 OtherRatios 计算应扣额度。
+func ComputeTaskQuotaFromBillingRatios(task *model.Task, ratios map[string]float64) (int, *common.QuotaClamp) {
+	if task == nil || task.Quota <= 0 {
+		return 0, nil
+	}
+	existing := taskBillingContextPriceData(task.PrivateData.BillingContext)
+	if existing == nil {
+		return 0, nil
+	}
+	baseQuota := existing.RemoveOtherRatiosFromFloat(float64(task.Quota))
+	adjusted := &types.PriceData{}
+	if !adjusted.ReplaceOtherRatios(ratios) {
+		return 0, nil
+	}
+	result := adjusted.ApplyOtherRatiosToFloat(baseQuota)
+	return common.QuotaFromFloatChecked(result)
+}
+
 // taskModelName 从 BillingContext 或 Properties 中获取模型名称。
 func taskModelName(task *model.Task) string {
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.OriginModelName != "" {

@@ -848,3 +848,45 @@ func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment(t *testing.T) {
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 }
+
+func TestComputeTaskQuotaFromBillingRatiosAdjustsSeconds(t *testing.T) {
+	task := &model.Task{Quota: 3000}
+	task.PrivateData.BillingContext = &model.TaskBillingContext{
+		OtherRatios: map[string]float64{
+			"seconds": 30,
+		},
+	}
+
+	actual, clamp := ComputeTaskQuotaFromBillingRatios(task, map[string]float64{
+		"seconds": 8,
+	})
+	require.Nil(t, clamp)
+	assert.Equal(t, 800, actual)
+}
+
+func TestSettle_SecondsBilling_AllowsAdaptorAdjustDespiteUsePrice(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 33, 33, 33
+	const initQuota, preConsumed = 10000, 3000
+	const tokenRemain = 8000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-seconds-billing", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.PerCallBilling = false
+	task.PrivateData.BillingContext.OtherRatios = map[string]float64{
+		"seconds": 30,
+	}
+
+	adaptor := &mockAdaptor{adjustReturn: 800}
+	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}
+
+	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult)
+
+	assert.Equal(t, initQuota+(preConsumed-800), getUserQuota(t, userID))
+	assert.Equal(t, 800, task.Quota)
+}
