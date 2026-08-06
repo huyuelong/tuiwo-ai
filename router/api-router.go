@@ -127,6 +127,12 @@ func SetApiRouter(router *gin.Engine) {
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
+
+				// Private media uploads (S3-compatible presigned PUT/GET)
+				selfRoute.GET("/media/upload-config", controller.GetMediaUploadConfig)
+				selfRoute.POST("/media/uploads/initiate", middleware.CriticalRateLimit(), controller.InitiateMediaUpload)
+				selfRoute.POST("/media/uploads/complete", middleware.CriticalRateLimit(), controller.CompleteMediaUpload)
+				selfRoute.POST("/media/presign-get", middleware.CriticalRateLimit(), controller.PresignMediaGet)
 			}
 
 			adminRoute := userRoute.Group("/")
