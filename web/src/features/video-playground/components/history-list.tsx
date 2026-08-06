@@ -26,7 +26,6 @@ import { VideoHistoryPagination } from './history-pagination'
 
 type VideoHistoryListProps = {
   items: VideoTaskDto[]
-  selectedTaskId?: string
   page: number
   pageSize: VideoHistoryPageSize
   total: number
@@ -34,7 +33,7 @@ type VideoHistoryListProps = {
   isLoading: boolean
   isFetching: boolean
   errorMessage: string | null
-  onSelect: (task: VideoTaskDto) => void
+  onViewDetails: (task: VideoTaskDto) => void
   onPageChange: (page: number) => void
   onPageSizeChange: (pageSize: VideoHistoryPageSize) => void
 }
@@ -76,8 +75,7 @@ export function VideoHistoryList(props: VideoHistoryListProps) {
           <VideoHistoryCard
             key={item.task_id}
             task={item}
-            selected={props.selectedTaskId === item.task_id}
-            onSelect={props.onSelect}
+            onViewDetails={props.onViewDetails}
           />
         ))}
       </div>
