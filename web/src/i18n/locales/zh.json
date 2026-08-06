@@ -53,6 +53,7 @@
     "{{count}} models": "{{count}} 个模型",
     "{{count}} months ago": "{{count}} 个月前",
     "{{count}} override": "{{count}} 个覆盖",
+    "{{count}} running": "{{count}} 个进行中",
     "{{count}} selected targets available for bulk copy.": "已选择 {{count}} 个目标，可用于批量复制。",
     "{{count}} tiers": "{{count}} 档",
     "{{count}} Uptime Kuma groups will be removed from the list.": "将从列表中移除 {{count}} 个 Uptime Kuma 分组。",
