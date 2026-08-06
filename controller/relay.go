@@ -601,6 +601,18 @@ func RelayTask(c *gin.Context) {
 		task.Quota = result.Quota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action
+		task.TaskType = model.ResolveTaskType(relayInfo.Action)
+		if taskReq, err := relaycommon.GetTaskRequest(c); err == nil {
+			if raw, marshalErr := common.Marshal(taskReq); marshalErr == nil {
+				input := string(raw)
+				if promoted, promoErr := service.PromoteTaskMediaAssets(c.Request.Context(), relayInfo.UserId, task.TaskID, input); promoErr != nil {
+					common.SysError("promote task media assets: " + promoErr.Error())
+				} else {
+					input = promoted
+				}
+				task.Properties.Input = input
+			}
+		}
 		if insertErr := task.Insert(); insertErr != nil {
 			common.SysError("insert task error: " + insertErr.Error())
 		}
