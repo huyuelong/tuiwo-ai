@@ -27,7 +27,6 @@ type fakeMediaS3 struct {
 	putErr    error
 	putKeys   []string
 	deleted   []string
-	copyOK    bool
 	copyErr   error
 	copyCalls []mediaCopyCall
 }
