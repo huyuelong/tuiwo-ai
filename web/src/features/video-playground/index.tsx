@@ -60,6 +60,11 @@ export function VideoPlayground() {
       void history.invalidate()
     },
     onTaskUpdate: (next) => {
+      history.upsertTask(next)
+      setDetailTask((current) => {
+        if (!current || current.task_id !== next.task_id) return current
+        return { ...current, ...next }
+      })
       if (TERMINAL_TASK_STATUSES.has(next.status)) {
         void history.invalidate()
       }
@@ -96,7 +101,7 @@ export function VideoPlayground() {
       ids.add(id)
     }
     return ids.size
-  }, [history.items, submitting])
+  }, [history.items])
 
   useEffect(() => {
     if (groups.length === 0) return

@@ -49,6 +49,7 @@ type UseVideoHistoryResult = {
   setPageSize: (pageSize: VideoHistoryPageSize) => void
   refetch: () => Promise<unknown>
   invalidate: () => Promise<void>
+  upsertTask: (task: VideoTaskDto) => void
 }
 
 export function useVideoHistory(): UseVideoHistoryResult {
@@ -90,6 +91,34 @@ export function useVideoHistory(): UseVideoHistoryResult {
     })
   }, [queryClient])
 
+  const upsertTask = useCallback(
+    (task: VideoTaskDto) => {
+      const taskId = task.task_id?.trim()
+      if (!taskId) return
+      queryClient.setQueriesData(
+        { queryKey: ['video-playground-history'] },
+        (previous: unknown) => {
+          if (!previous || typeof previous !== 'object') return previous
+          const page = previous as {
+            items?: VideoTaskDto[]
+            total?: number
+            page?: number
+            page_size?: number
+          }
+          if (!Array.isArray(page.items)) return previous
+          const index = page.items.findIndex(
+            (item) => item.task_id?.trim() === taskId
+          )
+          if (index < 0) return previous
+          const items = page.items.slice()
+          items[index] = { ...items[index], ...task, task_id: taskId }
+          return { ...page, items }
+        }
+      )
+    },
+    [queryClient]
+  )
+
   const errorMessage = useMemo(() => {
     if (!query.error) return null
     return query.error instanceof Error
@@ -110,5 +139,6 @@ export function useVideoHistory(): UseVideoHistoryResult {
     setPageSize,
     refetch: query.refetch,
     invalidate,
+    upsertTask,
   }
 }

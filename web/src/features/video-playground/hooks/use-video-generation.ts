@@ -78,10 +78,6 @@ export function useVideoGeneration(
     pollTimersRef.current.clear()
   }, [])
 
-  const syncSubmitting = useCallback(() => {
-    setSubmitting(pollTimersRef.current.size > 0)
-  }, [])
-
   const reset = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
@@ -104,7 +100,6 @@ export function useVideoGeneration(
           clearPoll(taskId)
           startedAtRef.current.delete(taskId)
           removePendingTaskId(taskId)
-          syncSubmitting()
           return
         }
 
@@ -127,7 +122,6 @@ export function useVideoGeneration(
             clearPoll(taskId)
             startedAtRef.current.delete(taskId)
             removePendingTaskId(taskId)
-            syncSubmitting()
             optionsRef.current.onTerminal?.(nextTask)
             if (!silent) {
               if (nextTask.status === 'SUCCESS') {
@@ -146,7 +140,6 @@ export function useVideoGeneration(
           if ((error as { name?: string })?.name === 'CanceledError') return
           clearPoll(taskId)
           startedAtRef.current.delete(taskId)
-          syncSubmitting()
           if (!silent) {
             toast.error(
               error instanceof Error
@@ -157,9 +150,8 @@ export function useVideoGeneration(
         }
       }, POLL_INTERVAL_MS)
       pollTimersRef.current.set(taskId, timer)
-      syncSubmitting()
     },
-    [clearPoll, syncSubmitting, t]
+    [clearPoll, t]
   )
 
   const resumePolling = useCallback(
@@ -200,7 +192,6 @@ export function useVideoGeneration(
         toast.success(t('Video task submitted'))
         schedulePoll(taskId, false)
       } catch (error) {
-        syncSubmitting()
         if ((error as { name?: string })?.name === 'CanceledError') return
         const message =
           (
@@ -216,9 +207,11 @@ export function useVideoGeneration(
             ? error.message
             : t('Failed to submit video task'))
         toast.error(message)
+      } finally {
+        setSubmitting(false)
       }
     },
-    [schedulePoll, syncSubmitting, t]
+    [schedulePoll, t]
   )
 
   return { submitting, submit, resumePolling, reset }
