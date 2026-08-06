@@ -31,7 +31,6 @@ type VideoHistoryListProps = {
   total: number
   totalPages: number
   isLoading: boolean
-  isFetching: boolean
   errorMessage: string | null
   onViewDetails: (task: VideoTaskDto) => void
   onPageChange: (page: number) => void
@@ -42,53 +41,47 @@ export function VideoHistoryList(props: VideoHistoryListProps) {
   const { t } = useTranslation()
 
   return (
-    <div className='space-y-3'>
-      <div className='flex flex-wrap items-center gap-2'>
-        <h3 className='text-sm font-medium'>{t('Recent generations')}</h3>
-        {props.isFetching ? (
-          <Loader2
-            className='text-muted-foreground size-3.5 animate-spin'
-            aria-hidden
-          />
+    <div className='flex min-h-0 flex-1 flex-col'>
+      <div className='min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-5'>
+        {props.errorMessage ? (
+          <p className='text-sm text-destructive'>{props.errorMessage}</p>
         ) : null}
-      </div>
 
-      {props.errorMessage ? (
-        <p className='text-sm text-destructive'>{props.errorMessage}</p>
-      ) : null}
+        {props.isLoading ? (
+          <div className='text-muted-foreground flex items-center gap-2 text-sm'>
+            <Loader2 className='size-4 animate-spin' aria-hidden />
+            {t('Loading history…')}
+          </div>
+        ) : null}
 
-      {props.isLoading ? (
-        <div className='text-muted-foreground flex items-center gap-2 text-sm'>
-          <Loader2 className='size-4 animate-spin' aria-hidden />
-          {t('Loading history…')}
+        {!props.isLoading && props.items.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>
+            {t('No generation history yet.')}
+          </p>
+        ) : null}
+
+        <div className='space-y-3'>
+          {props.items.map((item) => (
+            <VideoHistoryCard
+              key={item.task_id}
+              task={item}
+              onViewDetails={props.onViewDetails}
+            />
+          ))}
         </div>
-      ) : null}
-
-      {!props.isLoading && props.items.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>
-          {t('No generation history yet.')}
-        </p>
-      ) : null}
-
-      <div className='space-y-3'>
-        {props.items.map((item) => (
-          <VideoHistoryCard
-            key={item.task_id}
-            task={item}
-            onViewDetails={props.onViewDetails}
-          />
-        ))}
       </div>
 
       {props.total > 0 ? (
-        <VideoHistoryPagination
-          page={props.page}
-          pageSize={props.pageSize}
-          total={props.total}
-          totalPages={props.totalPages}
-          onPageChange={props.onPageChange}
-          onPageSizeChange={props.onPageSizeChange}
-        />
+        <div className='bg-background shrink-0 border-t px-3 py-2 sm:px-4'>
+          <VideoHistoryPagination
+            page={props.page}
+            pageSize={props.pageSize}
+            total={props.total}
+            totalPages={props.totalPages}
+            onPageChange={props.onPageChange}
+            onPageSizeChange={props.onPageSizeChange}
+          />
+        </div>
       ) : null}
     </div>
   )
