@@ -76,6 +76,9 @@
 要点：
 
 - **无**上方独立大播放器 / Task ID 详情块；**无**卡片选中高亮
+- 卡片左栏：徽章 + 三行提示词 + 键值摘要 +「查看详情」（右侧 Sheet 展全量参数与参考媒体）
+- 「应用参数」**后续迭代**，本轮不做
+- 参考媒体：提交后提升到 `media-task-assets/`，Input 存 object_key，详情再预签名（见 `2026-08-06-video-result-panel-design.md` §6）
 - 分页：`useQuery` + `p` / `page_size`（6/12/24）；底栏含可点页码（`getPageNumbers`）
 - 刷新恢复：首屏拉第一页，非终态并入轮询；localStorage 仅缓存未完成 task id
 - 不直接绑 `DataTablePagination`（依赖 TanStack Table），视觉与控件组合对齐之
