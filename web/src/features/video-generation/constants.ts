@@ -39,10 +39,6 @@ export const DEFAULT_VIDEO_HISTORY_PAGE_SIZE: VideoHistoryPageSize = 6
 export const VIDEO_HISTORY_PAGE_SIZE_KEY = 'video-generation-page-size'
 export const VIDEO_PENDING_TASK_IDS_KEY = 'video-generation-pending-tasks'
 
-// 旧 video-playground 目录 localStorage 键，读取时自动迁移
-export const LEGACY_VIDEO_HISTORY_PAGE_SIZE_KEY = 'video-playground-page-size'
-export const LEGACY_VIDEO_PENDING_TASK_IDS_KEY = 'video-playground-pending-tasks'
-
 export const VIDEO_TASK_TYPE = 'video' as const
 
 export const TERMINAL_TASK_STATUSES = new Set([

@@ -69,7 +69,6 @@ export function resolveTaskModeLabelKey(task: VideoTaskDto): string {
   const action = (task.action || '').trim()
   if (action === 'firstTailGenerate') return 'First / last frame'
   if (action === 'referenceGenerate') return 'Reference'
-  if (action === 'generate') return 'Image to video'
   if (action === 'textGenerate' || !action) {
     const input = parseTaskInput(task)
     const media = input?.metadata?.input?.media || []
@@ -78,9 +77,6 @@ export function resolveTaskModeLabelKey(task: VideoTaskDto): string {
     }
     if (media.some((item) => item.type.startsWith('reference_'))) {
       return 'Reference'
-    }
-    if ((input?.images?.length || 0) > 0) {
-      return 'Image to video'
     }
     return 'Text to video'
   }
@@ -162,8 +158,7 @@ export function formatSizeLine(task: Pick<VideoTaskDto, 'properties'>): string {
   } else if (input.duration != null && input.duration > 0) {
     parts.push(`${input.duration}s`)
   }
-  const resolution =
-    input.metadata?.parameters?.resolution?.trim() || input.size?.trim()
+  const resolution = input.metadata?.parameters?.resolution?.trim()
   if (resolution) parts.push(resolution)
   const ratio = input.metadata?.parameters?.ratio?.trim()
   if (ratio) parts.push(ratio)

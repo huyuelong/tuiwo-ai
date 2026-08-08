@@ -48,7 +48,6 @@ describe('buildWan30SubmitRequest', () => {
       group: 'default',
       prompt: 'a cat walking on the moon',
       duration: 8,
-      size: '720P',
       metadata: {
         parameters: {
           resolution: '720P',
@@ -59,6 +58,7 @@ describe('buildWan30SubmitRequest', () => {
         },
       },
     })
+    assert.equal('size' in payload, false)
   })
 
   test('passes smart duration and omits empty seed', () => {
@@ -112,7 +112,6 @@ describe('buildWan30SubmitRequest', () => {
       },
       { type: 'last_frame', url: 'https://example.com/last.jpg' },
     ])
-    assert.equal(payload.images, undefined)
   })
 
   test('keeps a last-frame-only asset typed as last_frame', () => {

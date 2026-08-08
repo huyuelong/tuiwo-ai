@@ -232,8 +232,7 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
   )
   const resultUrl = task?.result_url?.trim() || ''
   const durationText = formatConfiguredDuration(input?.duration)
-  const resolution =
-    params?.resolution?.trim() || input?.size?.trim() || '-'
+  const resolution = params?.resolution?.trim() || '-'
   const ratio = params?.ratio?.trim() || '-'
   const status = (task?.status || '').trim().toUpperCase()
   const isSuccess = status === 'SUCCESS'

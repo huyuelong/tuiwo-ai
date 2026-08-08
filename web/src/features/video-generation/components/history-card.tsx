@@ -76,8 +76,7 @@ export function VideoHistoryCard(props: VideoHistoryCardProps) {
   const prompt = input?.prompt?.trim() || ''
   const params = input?.metadata?.parameters
   const durationText = formatConfiguredDuration(input?.duration)
-  const resolution =
-    params?.resolution?.trim() || input?.size?.trim() || '-'
+  const resolution = params?.resolution?.trim() || '-'
   const ratio = params?.ratio?.trim() || '-'
   const videoUrl = props.task.result_url?.trim() || ''
 

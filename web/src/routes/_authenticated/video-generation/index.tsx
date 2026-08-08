@@ -22,9 +22,9 @@ import { Main } from '@/components/layout'
 import { VideoGeneration } from '@/features/video-generation'
 import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 
-export const Route = createFileRoute('/_authenticated/playground/video')({
+export const Route = createFileRoute('/_authenticated/video-generation/')({
   beforeLoad: () => {
-    if (!isSidebarModuleEnabled('chat', 'playground')) {
+    if (!isSidebarModuleEnabled('chat', 'videoGeneration')) {
       throw redirect({ to: '/dashboard' })
     }
   },

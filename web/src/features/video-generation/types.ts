@@ -29,8 +29,6 @@ export type VideoSubmitRequest = {
   group?: string
   prompt: string
   duration?: number
-  size?: string
-  images?: string[]
   metadata?: {
     input?: {
       media?: VideoMediaItem[]
@@ -94,8 +92,6 @@ export type VideoTaskInputSnapshot = {
   model?: string
   prompt?: string
   duration?: number
-  size?: string
-  images?: string[]
   metadata?: {
     input?: {
       media?: VideoMediaItem[]

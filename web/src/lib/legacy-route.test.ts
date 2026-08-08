@@ -33,6 +33,7 @@ describe('legacy frontend route migration', () => {
       '/console/channel': '/channels',
       '/console/token': '/keys',
       '/console/playground': '/playground',
+      '/playground/video': '/video-generation',
       '/console/redemption': '/redemption-codes',
       '/console/user': '/users',
       '/console/personal': '/profile',

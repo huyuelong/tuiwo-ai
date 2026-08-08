@@ -44,7 +44,6 @@ export function buildWan30SubmitRequest(args: {
     group: group || undefined,
     prompt: values.prompt.trim(),
     duration: values.duration,
-    size: values.resolution,
     metadata: {
       parameters: {
         resolution: values.resolution,

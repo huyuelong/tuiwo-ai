@@ -49,7 +49,7 @@ function isRatio(value: string): value is Ratio {
 
 function resolveMode(task: VideoTaskDto): VideoMode {
   const label = resolveTaskModeLabelKey(task)
-  if (label === 'First / last frame' || label === 'Image to video') {
+  if (label === 'First / last frame') {
     return 'frames'
   }
   if (label === 'Reference') return 'reference'
@@ -154,8 +154,7 @@ export function mapWan30FormValuesFromTask(
     seed = Math.floor(params.seed)
   }
 
-  const resolutionRaw =
-    params?.resolution?.trim() || snapshot.size?.trim() || ''
+  const resolutionRaw = params?.resolution?.trim() || ''
   const resolution = isResolution(resolutionRaw)
     ? resolutionRaw
     : defaults.resolution
@@ -169,16 +168,12 @@ export function mapWan30FormValuesFromTask(
   const refVideos = mapMediaSlot(media, 'reference_video', 5, urlMap)
   const refAudios = mapMediaSlot(media, 'reference_audio', 5, urlMap)
 
-  // 旧版 images[] 无 object_key，无法可靠回填，计为跳过
-  const legacyImageSkip = (snapshot.images || []).length
-
   const skippedMediaCount =
     first.skipped +
     last.skipped +
     refImages.skipped +
     refVideos.skipped +
-    refAudios.skipped +
-    legacyImageSkip
+    refAudios.skipped
 
   const values: Wan30FormValues = {
     mode: resolveMode(task),

@@ -62,7 +62,7 @@ export function useSidebarData(): SidebarData {
           },
           {
             title: t('Video Generation'),
-            url: '/playground/video',
+            url: '/video-generation',
             icon: Clapperboard,
           },
           {

@@ -18,8 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   DEFAULT_VIDEO_HISTORY_PAGE_SIZE,
-  LEGACY_VIDEO_HISTORY_PAGE_SIZE_KEY,
-  LEGACY_VIDEO_PENDING_TASK_IDS_KEY,
   VIDEO_HISTORY_PAGE_SIZE_KEY,
   VIDEO_HISTORY_PAGE_SIZES,
   VIDEO_PENDING_TASK_IDS_KEY,
@@ -30,24 +28,9 @@ function canUseStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 }
 
-function migrateStorageItem(nextKey: string, legacyKey: string): string | null {
-  if (!canUseStorage()) return null
-  const current = window.localStorage.getItem(nextKey)
-  if (current != null && current !== '') return current
-  const legacy = window.localStorage.getItem(legacyKey)
-  if (legacy == null || legacy === '') return null
-  window.localStorage.setItem(nextKey, legacy)
-  window.localStorage.removeItem(legacyKey)
-  return legacy
-}
-
 export function readHistoryPageSize(): VideoHistoryPageSize {
   if (!canUseStorage()) return DEFAULT_VIDEO_HISTORY_PAGE_SIZE
-  const raw =
-    migrateStorageItem(
-      VIDEO_HISTORY_PAGE_SIZE_KEY,
-      LEGACY_VIDEO_HISTORY_PAGE_SIZE_KEY
-    ) ?? window.localStorage.getItem(VIDEO_HISTORY_PAGE_SIZE_KEY)
+  const raw = window.localStorage.getItem(VIDEO_HISTORY_PAGE_SIZE_KEY)
   const value = Number(raw)
   if (
     VIDEO_HISTORY_PAGE_SIZES.includes(value as VideoHistoryPageSize)
@@ -65,11 +48,7 @@ export function writeHistoryPageSize(pageSize: VideoHistoryPageSize): void {
 export function readPendingTaskIds(): string[] {
   if (!canUseStorage()) return []
   try {
-    const raw =
-      migrateStorageItem(
-        VIDEO_PENDING_TASK_IDS_KEY,
-        LEGACY_VIDEO_PENDING_TASK_IDS_KEY
-      ) ?? window.localStorage.getItem(VIDEO_PENDING_TASK_IDS_KEY)
+    const raw = window.localStorage.getItem(VIDEO_PENDING_TASK_IDS_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
