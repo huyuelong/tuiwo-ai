@@ -53,6 +53,26 @@ func TestPresignOwnedMediaKeysAllowsUploadPrefix(t *testing.T) {
 	assert.Equal(t, expectedURL, out[key])
 }
 
+func TestPresignOwnedMediaKeysAllowsResultPrefix(t *testing.T) {
+	setupPresignMediaTest(t)
+	expectedURL := "https://s3.example/get-result"
+	SetMediaS3ClientForTest(&fakeMediaS3{getURL: expectedURL}, nil)
+
+	key := "media-results/7/2026/08/09/task_abc.mp4"
+	out, err := PresignOwnedMediaKeys(context.Background(), 7, []string{key})
+	require.NoError(t, err)
+	assert.Equal(t, expectedURL, out[key])
+}
+
+func TestPresignOwnedMediaKeysRejectsForeignResultPrefix(t *testing.T) {
+	setupPresignMediaTest(t)
+	SetMediaS3ClientForTest(&fakeMediaS3{getURL: "https://s3.example/get"}, nil)
+
+	_, err := PresignOwnedMediaKeys(context.Background(), 7, []string{"media-results/8/2026/08/09/task_abc.mp4"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrMediaUploadValidation)
+}
+
 func TestPresignOwnedMediaKeysRejectsEmptyList(t *testing.T) {
 	setupPresignMediaTest(t)
 	SetMediaS3ClientForTest(&fakeMediaS3{getURL: "https://s3.example/get"}, nil)

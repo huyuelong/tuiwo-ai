@@ -115,8 +115,8 @@ func VideoProxy(c *gin.Context) {
 		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
 		req.Header.Set("Authorization", "Bearer "+channel.Key)
 	default:
-		// Video URL is stored in PrivateData.ResultURL (fallback to FailReason for old data)
-		videoURL = task.GetResultURL()
+		// 优先使用归档对象的预签名 URL；否则回退到私有 ResultURL / 代理地址
+		videoURL = service.EffectiveTaskResultURL(c.Request.Context(), task)
 	}
 
 	videoURL = strings.TrimSpace(videoURL)

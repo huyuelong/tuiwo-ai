@@ -1,19 +1,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/bytedance/gopkg/util/gopool"
 )
 
 const (
@@ -46,7 +46,7 @@ func GenerateMediaResultObjectKey(userId int, taskID string, now time.Time, ext 
 	return fmt.Sprintf("%s/%d/%s/%s%s", defaultMediaResultKeyPrefix, userId, day, taskID, ext), nil
 }
 
-// ResolveTaskResultURL 优先返回自有对象的预签名 GET URL，失败时回退上游 ResultURL。
+// ResolveTaskResultURL 返回 MinIO/S3 中已归档结果的预签名 GET URL。
 func ResolveTaskResultURL(ctx context.Context, task *model.Task) string {
 	if task == nil {
 		return ""
@@ -55,120 +55,193 @@ func ResolveTaskResultURL(ctx context.Context, task *model.Task) string {
 		ctx = context.Background()
 	}
 	key := strings.TrimSpace(task.PrivateData.StoredResultKey)
-	if key != "" {
-		client, err := getMediaS3Client()
-		if err == nil && client != nil {
-			if signed, err := client.PresignGet(ctx, key, mediaGetURLExpiry); err == nil && signed != "" {
-				return signed
-			}
-		}
+	if key == "" {
+		return ""
 	}
-	return task.GetResultURL()
+	client, err := getMediaS3Client()
+	if err != nil || client == nil {
+		return ""
+	}
+	signed, err := client.PresignGet(ctx, key, mediaGetURLExpiry)
+	if err != nil || signed == "" {
+		return ""
+	}
+	return signed
 }
 
-// ScheduleArchiveTaskResult 在后台异步转存，不阻塞轮询与结算。
-func ScheduleArchiveTaskResult(taskID int64) {
-	if taskID <= 0 {
-		return
+// EffectiveTaskResultURL 优先返回归档结果的预签名 URL，否则回退到任务私有 ResultURL。
+func EffectiveTaskResultURL(ctx context.Context, task *model.Task) string {
+	if task == nil {
+		return ""
 	}
-	gopool.Go(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), archiveHTTPTimeout+30*time.Second)
-		defer cancel()
-		if err := ArchiveTaskResult(ctx, taskID); err != nil {
-			logger.LogError(ctx, fmt.Sprintf("archive task result %d failed: %v", taskID, err))
-		}
-	})
+	if signed := ResolveTaskResultURL(ctx, task); signed != "" {
+		return signed
+	}
+	return strings.TrimSpace(task.GetResultURL())
 }
 
-// ArchiveTaskResult 将成功任务的上游视频转存到自有 S3。
-// 失败不改变任务状态；已有 StoredResultKey 时跳过。
-func ArchiveTaskResult(ctx context.Context, taskID int64) error {
-	var task model.Task
-	if err := model.DB.First(&task, taskID).Error; err != nil {
-		return err
+// StoreTaskResultFromURL 下载上游结果并写入自有对象存储，返回 object key。
+func StoreTaskResultFromURL(ctx context.Context, userId int, taskID, sourceURL string) (string, error) {
+	sourceURL = strings.TrimSpace(sourceURL)
+	if sourceURL == "" {
+		return "", fmt.Errorf("%w: empty result url", ErrMediaUploadValidation)
 	}
-	if task.PrivateData.StoredResultKey != "" {
-		return nil
+	if strings.HasPrefix(sourceURL, "data:") {
+		return StoreTaskResultFromDataURL(ctx, userId, taskID, sourceURL)
 	}
-	if task.Status != model.TaskStatusSuccess {
-		return nil
-	}
-
-	sourceURL := strings.TrimSpace(task.GetResultURL())
-	if sourceURL == "" || strings.HasPrefix(sourceURL, "data:") {
-		return nil
-	}
-	// 本地代理路径（.../v1/videos/{id}/content）没有上游直链，跳过
 	if strings.Contains(sourceURL, "/v1/videos/") && strings.HasSuffix(sourceURL, "/content") {
-		return nil
+		return "", fmt.Errorf("%w: proxy result url cannot be archived", ErrMediaUploadValidation)
 	}
 	parsed, err := url.Parse(sourceURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil
+		return "", fmt.Errorf("%w: invalid result url", ErrMediaUploadValidation)
 	}
 
-	cfg := LoadMediaStorageConfig()
-	if !cfg.IsReady() {
-		return ErrMediaUploadDisabled
-	}
-	client, err := getMediaS3Client()
+	client, objectKey, err := prepareMediaResultPut(userId, taskID, path.Ext(parsed.Path))
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	ext := path.Ext(parsed.Path)
-	objectKey, err := GenerateMediaResultObjectKey(task.UserId, task.TaskID, time.Now(), ext)
+	contentType, body, err := downloadTaskResult(ctx, sourceURL)
 	if err != nil {
-		return err
-	}
-
-	contentType, body, size, err := downloadTaskResult(ctx, sourceURL)
-	if err != nil {
-		return err
+		return "", err
 	}
 	defer body.Close()
 
-	if err := client.Put(ctx, objectKey, contentType, body, size); err != nil {
-		return fmt.Errorf("put archived result: %w", err)
+	if err := putArchivedResult(ctx, client, objectKey, contentType, body); err != nil {
+		return "", err
 	}
-
-	var fresh model.Task
-	if err := model.DB.First(&fresh, task.ID).Error; err != nil {
-		return err
-	}
-	if fresh.PrivateData.StoredResultKey != "" {
-		return nil
-	}
-	fresh.PrivateData.StoredResultKey = objectKey
-	fresh.UpdatedAt = common.GetTimestamp()
-	return model.DB.Model(&fresh).Select("PrivateData", "UpdatedAt").Updates(&fresh).Error
+	return objectKey, nil
 }
 
-func downloadTaskResult(ctx context.Context, sourceURL string) (contentType string, body io.ReadCloser, size int64, err error) {
-	// 结果 URL 来自上游/任务字段，按用户可控外链做 SSRF 防护
+// StoreTaskResultFromDataURL 解码 data URL 并写入自有对象存储。
+func StoreTaskResultFromDataURL(ctx context.Context, userId int, taskID, dataURL string) (string, error) {
+	dataURL = strings.TrimSpace(dataURL)
+	contentType, payload, err := decodeTaskResultDataURL(dataURL)
+	if err != nil {
+		return "", err
+	}
+	if int64(len(payload)) > maxArchiveDownloadBytes {
+		return "", fmt.Errorf("%w: result too large", ErrMediaUploadValidation)
+	}
+	if len(payload) == 0 {
+		return "", fmt.Errorf("%w: empty result body", ErrMediaUploadValidation)
+	}
+
+	ext := ".mp4"
+	switch {
+	case strings.Contains(contentType, "webm"):
+		ext = ".webm"
+	case strings.Contains(contentType, "quicktime"):
+		ext = ".mov"
+	}
+
+	client, objectKey, err := prepareMediaResultPut(userId, taskID, ext)
+	if err != nil {
+		return "", err
+	}
+	// data URL 已在内存中且可 seek，直接 Put，避免再落盘。
+	if err := client.Put(ctx, objectKey, contentType, bytes.NewReader(payload), int64(len(payload))); err != nil {
+		return "", fmt.Errorf("put archived result: %w", err)
+	}
+	return objectKey, nil
+}
+
+func prepareMediaResultPut(userId int, taskID, ext string) (mediaS3API, string, error) {
+	cfg := LoadMediaStorageConfig()
+	if !cfg.IsReady() {
+		return nil, "", ErrMediaUploadDisabled
+	}
+	client, err := getMediaS3Client()
+	if err != nil {
+		return nil, "", err
+	}
+	objectKey, err := GenerateMediaResultObjectKey(userId, taskID, time.Now(), ext)
+	if err != nil {
+		return nil, "", err
+	}
+	return client, objectKey, nil
+}
+
+func putArchivedResult(ctx context.Context, client mediaS3API, objectKey, contentType string, body io.Reader) error {
+	tmp, err := os.CreateTemp("", "task-result-*")
+	if err != nil {
+		return fmt.Errorf("create temp archived result: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}()
+
+	written, err := io.Copy(tmp, io.LimitReader(body, maxArchiveDownloadBytes+1))
+	if err != nil {
+		return fmt.Errorf("read archived result: %w", err)
+	}
+	if written == 0 {
+		return fmt.Errorf("%w: empty result body", ErrMediaUploadValidation)
+	}
+	if written > maxArchiveDownloadBytes {
+		return fmt.Errorf("%w: result too large", ErrMediaUploadValidation)
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("seek archived result: %w", err)
+	}
+	if err := client.Put(ctx, objectKey, contentType, tmp, written); err != nil {
+		return fmt.Errorf("put archived result: %w", err)
+	}
+	return nil
+}
+
+func decodeTaskResultDataURL(dataURL string) (contentType string, payload []byte, err error) {
+	parts := strings.SplitN(dataURL, ",", 2)
+	if len(parts) != 2 {
+		return "", nil, fmt.Errorf("%w: invalid data url", ErrMediaUploadValidation)
+	}
+	header := parts[0]
+	if !strings.HasPrefix(header, "data:") || !strings.Contains(header, ";base64") {
+		return "", nil, fmt.Errorf("%w: unsupported data url", ErrMediaUploadValidation)
+	}
+	contentType = strings.TrimPrefix(header, "data:")
+	contentType = strings.TrimSuffix(contentType, ";base64")
+	contentType = strings.TrimSpace(contentType)
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	payload, err = base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		payload, err = base64.RawStdEncoding.DecodeString(parts[1])
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: invalid data url payload", ErrMediaUploadValidation)
+		}
+	}
+	return contentType, payload, nil
+}
+
+func downloadTaskResult(ctx context.Context, sourceURL string) (contentType string, body io.ReadCloser, err error) {
 	if err := ValidateSSRFProtectedFetchURL(sourceURL); err != nil {
-		return "", nil, 0, fmt.Errorf("request reject: %v", err)
+		return "", nil, fmt.Errorf("request reject: %v", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
 	if err != nil {
-		return "", nil, 0, err
+		return "", nil, err
 	}
 	base := GetSSRFProtectedHTTPClient()
 	client := *base
 	client.Timeout = archiveHTTPTimeout
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", nil, 0, err
+		return "", nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = resp.Body.Close()
-		return "", nil, 0, fmt.Errorf("upstream result returned status %d", resp.StatusCode)
+		return "", nil, fmt.Errorf("upstream result returned status %d", resp.StatusCode)
 	}
 	if resp.ContentLength > maxArchiveDownloadBytes {
 		_ = resp.Body.Close()
-		return "", nil, 0, fmt.Errorf("%w: result too large", ErrMediaUploadValidation)
+		return "", nil, fmt.Errorf("%w: result too large", ErrMediaUploadValidation)
 	}
-	limited := http.MaxBytesReader(nil, resp.Body, maxArchiveDownloadBytes)
+	limited := http.MaxBytesReader(nil, resp.Body, maxArchiveDownloadBytes+1)
 	ct := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if i := strings.IndexByte(ct, ';'); i >= 0 {
 		ct = strings.TrimSpace(ct[:i])
@@ -176,5 +249,5 @@ func downloadTaskResult(ctx context.Context, sourceURL string) (contentType stri
 	if ct == "" {
 		ct = "video/mp4"
 	}
-	return ct, limited, resp.ContentLength, nil
+	return ct, limited, nil
 }

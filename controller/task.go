@@ -8,7 +8,6 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -86,7 +85,6 @@ func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {
 			}
 		}
 		item := relay.TaskModel2Dto(task)
-		item.ResultURL = service.ResolveTaskResultURL(nil, task)
 		result[i] = item
 	}
 	return result

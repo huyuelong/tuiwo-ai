@@ -178,10 +178,13 @@ describe('video history card layout', () => {
         task_id: 'task_success',
         status: 'SUCCESS',
         action: 'textGenerate',
-        result_url: 'https://example.com/a.mp4',
+        stored_result_key: 'media-results/1/a.mp4',
         properties: {
           input: JSON.stringify({ prompt: 'ok', model: 'wan3.0-video' }),
         },
+      },
+      mediaUrlMap: {
+        'media-results/1/a.mp4': 'https://example.com/a.mp4',
       },
       onViewDetails: () => undefined,
       onApplyParameters: () => undefined,
@@ -210,5 +213,52 @@ describe('video history card layout', () => {
       )
     )
     await unmountCard(failed)
+  })
+
+  test('centers the unavailable video message when a success task has no result key', async () => {
+    const rendered = await renderCard({
+      task: {
+        task_id: 'task_missing_url',
+        status: 'SUCCESS',
+        action: 'textGenerate',
+        properties: {
+          input: JSON.stringify({ prompt: 'ok', model: 'wan3.0-video' }),
+        },
+      },
+      onViewDetails: () => undefined,
+      onApplyParameters: () => undefined,
+    })
+
+    const placeholder = rendered.container.querySelector(
+      '.aspect-video.flex-col.items-center.justify-center.text-center'
+    )
+    assert.ok(placeholder)
+    assert.equal(placeholder.textContent?.includes('Video URL unavailable'), true)
+
+    await unmountCard(rendered)
+  })
+
+  test('plays success video from mediaUrlMap by stored_result_key', async () => {
+    const key = 'media-results/1/2026/08/09/task_ok.mp4'
+    const rendered = await renderCard({
+      task: {
+        task_id: 'task_ok',
+        status: 'SUCCESS',
+        action: 'textGenerate',
+        stored_result_key: key,
+        properties: {
+          input: JSON.stringify({ prompt: 'ok', model: 'wan3.0-video' }),
+        },
+      },
+      mediaUrlMap: { [key]: 'https://cdn.example/signed.mp4' },
+      onViewDetails: () => undefined,
+      onApplyParameters: () => undefined,
+    })
+
+    const video = rendered.container.querySelector('video')
+    assert.ok(video)
+    assert.equal(video.getAttribute('src'), 'https://cdn.example/signed.mp4')
+
+    await unmountCard(rendered)
   })
 })

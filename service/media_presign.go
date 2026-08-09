@@ -14,6 +14,10 @@ func userMediaTaskAssetKeyPrefix(userId int) string {
 	return fmt.Sprintf("%s/%d/", defaultMediaTaskAssetKeyPrefix, userId)
 }
 
+func userMediaResultKeyPrefix(userId int) string {
+	return fmt.Sprintf("%s/%d/", defaultMediaResultKeyPrefix, userId)
+}
+
 func validateOwnedMediaObjectKey(objectKey string, userId int) error {
 	objectKey = strings.TrimSpace(objectKey)
 	if objectKey == "" {
@@ -24,7 +28,10 @@ func validateOwnedMediaObjectKey(objectKey string, userId int) error {
 	}
 	uploadPrefix := userMediaUploadKeyPrefix(userId)
 	taskPrefix := userMediaTaskAssetKeyPrefix(userId)
-	if strings.HasPrefix(objectKey, uploadPrefix) || strings.HasPrefix(objectKey, taskPrefix) {
+	resultPrefix := userMediaResultKeyPrefix(userId)
+	if strings.HasPrefix(objectKey, uploadPrefix) ||
+		strings.HasPrefix(objectKey, taskPrefix) ||
+		strings.HasPrefix(objectKey, resultPrefix) {
 		return nil
 	}
 	return fmt.Errorf("%w: object_key access denied", ErrMediaUploadValidation)

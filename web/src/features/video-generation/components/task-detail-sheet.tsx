@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Check, Copy, Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -33,6 +33,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { cn } from '@/lib/utils'
 
 import { TERMINAL_TASK_STATUSES } from '../constants'
+import { usePresignedMediaUrls } from '../hooks/use-presigned-media-urls'
 import {
   formatConfiguredDuration,
   formatTaskElapsed,
@@ -44,7 +45,7 @@ import {
   resolveTaskModelName,
   type TaskMediaGroups,
 } from '../lib/parse-task-input'
-import { presignMediaObjectKeys } from '../media-api'
+import { collectTaskObjectKeys } from '../lib/task-object-keys'
 import type { VideoMediaItem, VideoTaskDto } from '../types'
 
 type VideoTaskDetailSheetProps = {
@@ -88,20 +89,6 @@ function formatOptionalBoolean(
   return value ? t('Yes') : t('No')
 }
 
-function collectObjectKeys(groups: TaskMediaGroups): string[] {
-  const keys: string[] = []
-  const seen = new Set<string>()
-  for (const section of MEDIA_GROUP_SECTIONS) {
-    for (const item of groups[section.key]) {
-      const key = item.object_key?.trim()
-      if (!key || seen.has(key)) continue
-      seen.add(key)
-      keys.push(key)
-    }
-  }
-  return keys
-}
-
 function resolveMediaDisplayUrl(
   item: VideoMediaItem,
   urlMap: Record<string, string>
@@ -111,7 +98,7 @@ function resolveMediaDisplayUrl(
     const signed = urlMap[objectKey]?.trim()
     if (signed) return signed
   }
-  return item.url?.trim() || ''
+  return ''
 }
 
 // 详情卡片参数行
@@ -128,6 +115,8 @@ function MediaPreview(props: {
   kind: 'image' | 'video' | 'audio'
   url: string
   unavailableLabel: string
+  onMediaError?: () => void
+  onMediaLoaded?: () => void
 }) {
   if (!props.url) {
     return (
@@ -140,6 +129,8 @@ function MediaPreview(props: {
         src={props.url}
         alt=''
         className='max-h-48 w-full rounded-md border object-contain bg-muted/30'
+        onLoad={() => props.onMediaLoaded?.()}
+        onError={() => props.onMediaError?.()}
       />
     )
   }
@@ -151,69 +142,60 @@ function MediaPreview(props: {
         controls
         playsInline
         preload='metadata'
+        onLoadedData={() => props.onMediaLoaded?.()}
+        onError={() => props.onMediaError?.()}
       />
     )
   }
   return (
-    <audio className='w-full' src={props.url} controls preload='metadata' />
+    <audio
+      className='w-full'
+      src={props.url}
+      controls
+      preload='metadata'
+      onLoadedData={() => props.onMediaLoaded?.()}
+      onError={() => props.onMediaError?.()}
+    />
   )
 }
 
 export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
   const { t } = useTranslation()
   const { copiedText, copyToClipboard } = useCopyToClipboard()
-  const [urlMap, setUrlMap] = useState<Record<string, string>>({})
-  const [presigning, setPresigning] = useState(false)
-  const [presignError, setPresignError] = useState<string | null>(null)
 
   const task = props.task
   const taskId = task?.task_id?.trim() || ''
+  const objectKeys = useMemo(
+    () => (task ? collectTaskObjectKeys(task) : []),
+    [task]
+  )
+  const { urlMap, isPresigning, errorMessage, refresh } = usePresignedMediaUrls(
+    objectKeys,
+    props.open && Boolean(task)
+  )
+  // 按 object_key 限流：签名 URL 每次变化，不能用 src 去重
+  const mediaErrorKeysRef = useRef(new Set<string>())
+
+  const handleMediaError = (objectKey: string) => {
+    const key = objectKey.trim()
+    if (!key || mediaErrorKeysRef.current.has(key)) return
+    mediaErrorKeysRef.current.add(key)
+    refresh()
+  }
+
+  const clearMediaErrorKey = (objectKey: string) => {
+    const key = objectKey.trim()
+    if (key) mediaErrorKeysRef.current.delete(key)
+  }
 
   useEffect(() => {
-    if (!props.open || !task) {
-      setUrlMap({})
-      setPresignError(null)
-      setPresigning(false)
+    if (!props.open) {
+      mediaErrorKeysRef.current.clear()
       return
     }
-
-    const groups = groupTaskMedia(task)
-    const objectKeys = collectObjectKeys(groups)
-    if (objectKeys.length === 0) {
-      setUrlMap({})
-      setPresignError(null)
-      setPresigning(false)
-      return
-    }
-
-    const controller = new AbortController()
-    setPresigning(true)
-    setPresignError(null)
-
-    void presignMediaObjectKeys(objectKeys, controller.signal)
-      .then((urls) => {
-        if (controller.signal.aborted) return
-        setUrlMap(urls)
-      })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return
-        const message =
-          err instanceof Error && err.message.trim()
-            ? err.message
-            : t('Failed to presign media')
-        setPresignError(message)
-        toast.error(t('Failed to presign media'))
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setPresigning(false)
-        }
-      })
-
-    return () => {
-      controller.abort()
-    }
-  }, [props.open, task, t])
+    if (!errorMessage) return
+    toast.error(t('Failed to presign media'))
+  }, [props.open, errorMessage, t])
 
   const statusKey = task ? resolveStatusLabelKey(task) : 'Unknown'
   const statusTone = task
@@ -230,7 +212,8 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
     groups &&
       MEDIA_GROUP_SECTIONS.some((section) => groups[section.key].length > 0)
   )
-  const resultUrl = task?.result_url?.trim() || ''
+  const resultKey = task?.stored_result_key?.trim() || ''
+  const resultUrl = resultKey ? urlMap[resultKey]?.trim() || '' : ''
   const durationText = formatConfiguredDuration(input?.duration)
   const resolution = params?.resolution?.trim() || '-'
   const ratio = params?.ratio?.trim() || '-'
@@ -238,6 +221,8 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
   const isSuccess = status === 'SUCCESS'
   const isFailure = status === 'FAILURE' || status === 'FAILED'
   const isNonTerminal = task ? !TERMINAL_TASK_STATUSES.has(status) : false
+  const presignError = errorMessage ? t('Failed to presign media') : null
+  const presigning = isPresigning
 
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
@@ -402,12 +387,15 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
                       <div className='space-y-3'>
                         {items.map((item, index) => {
                           const url = resolveMediaDisplayUrl(item, urlMap)
+                          const objectKey = item.object_key?.trim() || ''
                           return (
                             <MediaPreview
                               key={`${section.key}-${item.object_key || item.url || index}`}
                               kind={section.kind}
                               url={url}
                               unavailableLabel={t('Media unavailable')}
+                              onMediaLoaded={() => clearMediaErrorKey(objectKey)}
+                              onMediaError={() => handleMediaError(objectKey)}
                             />
                           )
                         })}
@@ -418,7 +406,7 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
               </div>
             ) : null}
 
-            {resultUrl && isSuccess ? (
+            {isSuccess && resultUrl ? (
               <div className='space-y-2'>
                 <h3 className='text-sm font-medium'>{t('Result video')}</h3>
                 <video
@@ -427,7 +415,28 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
                   controls
                   playsInline
                   preload='metadata'
+                  onLoadedData={() => clearMediaErrorKey(resultKey)}
+                  onError={() => handleMediaError(resultKey)}
                 />
+              </div>
+            ) : null}
+
+            {isSuccess && !resultUrl && resultKey && presigning ? (
+              <div className='space-y-2'>
+                <h3 className='text-sm font-medium'>{t('Result video')}</h3>
+                <div className='bg-muted/40 text-muted-foreground flex aspect-video flex-col items-center justify-center gap-2 rounded-md border text-sm'>
+                  <Loader2 className='size-5 animate-spin' aria-hidden />
+                  <span>{t('Loading media…')}</span>
+                </div>
+              </div>
+            ) : null}
+
+            {isSuccess && !resultUrl && !(resultKey && presigning) ? (
+              <div className='space-y-2'>
+                <h3 className='text-sm font-medium'>{t('Result video')}</h3>
+                <div className='bg-muted/40 text-muted-foreground flex aspect-video flex-col items-center justify-center rounded-md border px-3 text-center text-sm'>
+                  <p>{t('Video URL unavailable')}</p>
+                </div>
               </div>
             ) : null}
           </div>

@@ -42,9 +42,10 @@ type TaskDto struct {
 	Action     string          `json:"action"`
 	TaskType   string          `json:"task_type,omitempty"`
 	Status     string          `json:"status"`
-	FailReason string          `json:"fail_reason"`
-	ResultURL  string          `json:"result_url,omitempty"` // 任务结果 URL（视频地址等）
-	SubmitTime int64           `json:"submit_time"`
+	FailReason      string          `json:"fail_reason"`
+	ResultURL       string          `json:"result_url,omitempty"`        // API fetch 可签发预签名 URL
+	StoredResultKey string          `json:"stored_result_key,omitempty"` // 自有对象键，前端用 presign-get 刷新
+	SubmitTime      int64           `json:"submit_time"`
 	StartTime  int64           `json:"start_time"`
 	FinishTime int64           `json:"finish_time"`
 	Progress   string          `json:"progress"`

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relay"
+	"github.com/QuantumNous/new-api/service"
 )
 
 func getGeminiVideoURL(channel *model.Channel, task *model.Task, apiKey string) (string, error) {
@@ -149,7 +151,7 @@ func getVertexVideoURL(channel *model.Channel, task *model.Task) (string, error)
 	if channel == nil || task == nil {
 		return "", fmt.Errorf("invalid channel or task")
 	}
-	if url := strings.TrimSpace(task.GetResultURL()); url != "" && !isTaskProxyContentURL(url, task.TaskID) {
+	if url := strings.TrimSpace(service.EffectiveTaskResultURL(context.Background(), task)); url != "" && !isTaskProxyContentURL(url, task.TaskID) {
 		return url, nil
 	}
 	if url := extractVertexVideoURLFromTaskData(task); url != "" {

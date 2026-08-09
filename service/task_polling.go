@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -539,17 +538,25 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if task.FinishTime == 0 {
 			task.FinishTime = now
 		}
-		if strings.HasPrefix(taskResult.Url, "data:") {
-			// data: URI (e.g. Vertex base64 encoded video) — keep in Data, not in ResultURL
-			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
-		} else if taskResult.Url != "" {
-			// Direct upstream URL (e.g. Kling, Ali, Doubao, etc.)
-			task.PrivateData.ResultURL = taskResult.Url
+		if taskResult.Url != "" {
+			objectKey, archiveErr := StoreTaskResultFromURL(ctx, task.UserId, task.TaskID, taskResult.Url)
+			if archiveErr != nil {
+				logger.LogError(ctx, fmt.Sprintf("Task %s store result failed: %v", task.TaskID, archiveErr))
+				task.Status = model.TaskStatusFailure
+				task.FailReason = fmt.Sprintf("failed to store video result: %v", archiveErr)
+				if quota != 0 {
+					shouldRefund = true
+				}
+			} else {
+				task.PrivateData.StoredResultKey = objectKey
+				task.PrivateData.ResultURL = ""
+				shouldSettle = true
+			}
 		} else {
-			// No URL from adaptor — construct proxy URL using public task ID
+			// 无结果 URL 的渠道（如 OpenAI/Sora）继续走内容代理；播放依赖上游 content 接口。
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
+			shouldSettle = true
 		}
-		shouldSettle = true
 	case model.TaskStatusFailure:
 		logger.LogJson(ctx, fmt.Sprintf("Task %s failed", taskId), task)
 		task.Status = model.TaskStatusFailure
@@ -581,9 +588,6 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			logger.LogWarn(ctx, fmt.Sprintf("Task %s CAS lost or no-op update, skip billing", task.TaskID))
 			shouldRefund = false
 			shouldSettle = false
-		} else if task.Status == model.TaskStatusSuccess {
-			// CAS 获胜后再异步转存，失败不影响任务终态与计费
-			ScheduleArchiveTaskResult(task.ID)
 		}
 	} else if !snap.Equal(task.Snapshot()) {
 		if _, err := task.UpdateWithStatus(snap.Status); err != nil {

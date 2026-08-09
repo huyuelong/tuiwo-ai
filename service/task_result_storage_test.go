@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,9 +31,7 @@ func TestGenerateMediaResultObjectKeyUsesDateFolders(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestArchiveTaskResultUploadsAndStoresKey(t *testing.T) {
-	setupMediaUploadDB(t)
-	require.NoError(t, model.DB.AutoMigrate(&model.Task{}))
+func TestStoreTaskResultFromURLUploadsToObjectStorage(t *testing.T) {
 	ResetMediaStorageConfigForTest()
 	t.Cleanup(ResetMediaStorageConfigForTest)
 	InitHttpClient()
@@ -58,40 +57,54 @@ func TestArchiveTaskResultUploadsAndStoresKey(t *testing.T) {
 	fake := &fakeMediaS3{getURL: "https://s3.example/signed-get"}
 	SetMediaS3ClientForTest(fake, nil)
 
-	task := &model.Task{
-		TaskID: "task_archive_1",
-		UserId: 11,
-		Status: model.TaskStatusSuccess,
-		PrivateData: model.TaskPrivateData{
-			ResultURL: upstream.URL + "/video.mp4",
-		},
-	}
-	require.NoError(t, model.DB.Create(task).Error)
-
-	require.NoError(t, ArchiveTaskResult(context.Background(), task.ID))
+	objectKey, err := StoreTaskResultFromURL(
+		context.Background(),
+		11,
+		"task_archive_1",
+		upstream.URL+"/video.mp4",
+	)
+	require.NoError(t, err)
 	require.Len(t, fake.putKeys, 1)
-	assert.Contains(t, fake.putKeys[0], "media-results/11/")
+	assert.Equal(t, fake.putKeys[0], objectKey)
+	assert.Equal(t, int64(len("fake-video-bytes")), fake.putSizes[0])
+	assert.Contains(t, objectKey, "media-results/11/")
 
-	var reloaded model.Task
-	require.NoError(t, model.DB.First(&reloaded, task.ID).Error)
-	assert.Equal(t, fake.putKeys[0], reloaded.PrivateData.StoredResultKey)
-
-	resolved := ResolveTaskResultURL(context.Background(), &reloaded)
-	assert.Equal(t, "https://s3.example/signed-get", resolved)
+	task := &model.Task{
+		PrivateData: model.TaskPrivateData{StoredResultKey: objectKey},
+	}
+	assert.Equal(t, "https://s3.example/signed-get", ResolveTaskResultURL(context.Background(), task))
 }
 
 func TestDownloadTaskResultRejectsPrivateURL(t *testing.T) {
 	InitHttpClient()
 	configureSSRFTestFetchSetting(t)
 
-	_, _, _, err := downloadTaskResult(context.Background(), "http://127.0.0.1/secret.mp4")
+	_, _, err := downloadTaskResult(context.Background(), "http://127.0.0.1/secret.mp4")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "request reject")
 }
 
-func TestArchiveTaskResultSkipsWhenAlreadyStored(t *testing.T) {
-	setupMediaUploadDB(t)
-	require.NoError(t, model.DB.AutoMigrate(&model.Task{}))
+func TestResolveTaskResultURLEmptyWithoutStoredKey(t *testing.T) {
+	t.Parallel()
+	task := &model.Task{
+		PrivateData: model.TaskPrivateData{ResultURL: "https://upstream.example/a.mp4"},
+	}
+	assert.Equal(t, "", ResolveTaskResultURL(context.Background(), task))
+}
+
+func TestEffectiveTaskResultURLFallsBackToStoredResultURL(t *testing.T) {
+	t.Parallel()
+	task := &model.Task{
+		PrivateData: model.TaskPrivateData{ResultURL: "https://proxy.example/v1/videos/task_x/content"},
+	}
+	assert.Equal(
+		t,
+		"https://proxy.example/v1/videos/task_x/content",
+		EffectiveTaskResultURL(context.Background(), task),
+	)
+}
+
+func TestStoreTaskResultFromDataURLUploadsDecodedBytes(t *testing.T) {
 	ResetMediaStorageConfigForTest()
 	t.Cleanup(ResetMediaStorageConfigForTest)
 
@@ -99,28 +112,17 @@ func TestArchiveTaskResultSkipsWhenAlreadyStored(t *testing.T) {
 	t.Setenv("MEDIA_S3_BUCKET", "bucket")
 	t.Setenv("MEDIA_S3_ACCESS_KEY", "ak")
 	t.Setenv("MEDIA_S3_SECRET_KEY", "sk")
+	t.Setenv("MEDIA_S3_REGION", "us-east-1")
 
-	fake := &fakeMediaS3{}
+	fake := &fakeMediaS3{getURL: "https://s3.example/signed-get"}
 	SetMediaS3ClientForTest(fake, nil)
 
-	task := &model.Task{
-		TaskID: "task_archive_skip",
-		UserId: 11,
-		Status: model.TaskStatusSuccess,
-		PrivateData: model.TaskPrivateData{
-			ResultURL:       "https://upstream.example/a.mp4",
-			StoredResultKey: "media-results/11/2026/08/05/task_archive_skip.mp4",
-		},
-	}
-	require.NoError(t, model.DB.Create(task).Error)
-	require.NoError(t, ArchiveTaskResult(context.Background(), task.ID))
-	assert.Empty(t, fake.putKeys)
-}
-
-func TestResolveTaskResultURLFallsBackToUpstream(t *testing.T) {
-	t.Parallel()
-	task := &model.Task{
-		PrivateData: model.TaskPrivateData{ResultURL: "https://upstream.example/a.mp4"},
-	}
-	assert.Equal(t, "https://upstream.example/a.mp4", ResolveTaskResultURL(context.Background(), task))
+	payload := "fake-mp4"
+	dataURL := "data:video/mp4;base64," + base64.StdEncoding.EncodeToString([]byte(payload))
+	objectKey, err := StoreTaskResultFromDataURL(context.Background(), 9, "task_data_1", dataURL)
+	require.NoError(t, err)
+	require.Len(t, fake.putKeys, 1)
+	assert.Equal(t, objectKey, fake.putKeys[0])
+	assert.Equal(t, int64(len(payload)), fake.putSizes[0])
+	assert.Contains(t, objectKey, "media-results/9/")
 }

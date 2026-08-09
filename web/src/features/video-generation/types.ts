@@ -72,6 +72,7 @@ export type VideoTaskDto = {
   progress?: string
   fail_reason?: string
   result_url?: string
+  stored_result_key?: string
   submit_time?: number
   start_time?: number
   finish_time?: number

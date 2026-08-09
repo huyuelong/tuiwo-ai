@@ -18,12 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardTitle } from '@/components/ui/card'
 
 import type { VideoHistoryPageSize } from '../constants'
+import { usePresignedMediaUrls } from '../hooks/use-presigned-media-urls'
+import { collectTasksResultObjectKeys } from '../lib/task-object-keys'
 import type { VideoTaskDto } from '../types'
 import { VideoHistoryList } from './history-list'
 import { VideoTaskDetailSheet } from './task-detail-sheet'
@@ -50,6 +53,14 @@ type VideoResultPanelProps = {
 export function VideoResultPanel(props: VideoResultPanelProps) {
   const { t } = useTranslation()
   const runningCount = props.runningCount ?? 0
+  const objectKeys = useMemo(
+    () => collectTasksResultObjectKeys(props.items),
+    [props.items]
+  )
+  const { urlMap, isPresigning, refresh } = usePresignedMediaUrls(
+    objectKeys,
+    props.items.length > 0
+  )
 
   return (
     <>
@@ -89,6 +100,8 @@ export function VideoResultPanel(props: VideoResultPanelProps) {
         <div className='flex min-h-0 flex-1 flex-col'>
           <VideoHistoryList
             items={props.items}
+            mediaUrlMap={urlMap}
+            mediaPresigning={isPresigning}
             page={props.page}
             pageSize={props.pageSize}
             total={props.total}
@@ -98,6 +111,7 @@ export function VideoResultPanel(props: VideoResultPanelProps) {
             onViewDetails={props.onViewDetails}
             onApplyParameters={props.onApplyParameters}
             applyingParameters={props.applyingParameters}
+            onMediaError={refresh}
             onPageChange={props.setPage}
             onPageSizeChange={props.setPageSize}
           />

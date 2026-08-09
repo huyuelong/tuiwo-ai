@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Check, Copy, Loader2 } from 'lucide-react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -37,9 +38,12 @@ import type { VideoTaskDto } from '../types'
 
 type VideoHistoryCardProps = {
   task: VideoTaskDto
+  mediaUrlMap?: Record<string, string>
+  mediaPresigning?: boolean
   onViewDetails: (task: VideoTaskDto) => void
   onApplyParameters: (task: VideoTaskDto) => void
   applyingParameters?: boolean
+  onMediaError?: () => void
 }
 
 function formatSubmitTime(task: VideoTaskDto): string {
@@ -66,6 +70,8 @@ function CardKvRow(props: { label: string; value: string }) {
 export function VideoHistoryCard(props: VideoHistoryCardProps) {
   const { t } = useTranslation()
   const { copiedText, copyToClipboard } = useCopyToClipboard()
+  // 按 object_key 限流：签名 URL 每次变化，不能用 src 去重
+  const mediaErrorKeysRef = useRef(new Set<string>())
 
   const taskId = props.task.task_id?.trim() || ''
   const statusKey = resolveStatusLabelKey(props.task)
@@ -78,7 +84,11 @@ export function VideoHistoryCard(props: VideoHistoryCardProps) {
   const durationText = formatConfiguredDuration(input?.duration)
   const resolution = params?.resolution?.trim() || '-'
   const ratio = params?.ratio?.trim() || '-'
-  const videoUrl = props.task.result_url?.trim() || ''
+  const resultKey = props.task.stored_result_key?.trim() || ''
+  const videoUrl = resultKey
+    ? props.mediaUrlMap?.[resultKey]?.trim() || ''
+    : ''
+  const mediaPresigning = Boolean(props.mediaPresigning)
 
   const status = (props.task.status || '').trim().toUpperCase()
   const isSuccess = status === 'SUCCESS'
@@ -226,13 +236,30 @@ export function VideoHistoryCard(props: VideoHistoryCardProps) {
               controls
               playsInline
               preload='metadata'
+              onLoadedData={() => {
+                if (resultKey) mediaErrorKeysRef.current.delete(resultKey)
+              }}
+              onError={() => {
+                if (!resultKey || mediaErrorKeysRef.current.has(resultKey)) {
+                  return
+                }
+                mediaErrorKeysRef.current.add(resultKey)
+                props.onMediaError?.()
+              }}
             />
           ) : null}
 
-          {isSuccess && !videoUrl ? (
-            <p className='text-muted-foreground text-sm'>
-              {t('Video URL unavailable')}
-            </p>
+          {isSuccess && !videoUrl && resultKey && mediaPresigning ? (
+            <div className='bg-muted/40 text-muted-foreground flex aspect-video flex-col items-center justify-center gap-2 rounded-md border text-sm'>
+              <Loader2 className='size-5 animate-spin' aria-hidden />
+              <span>{t('Loading media…')}</span>
+            </div>
+          ) : null}
+
+          {isSuccess && !videoUrl && !(resultKey && mediaPresigning) ? (
+            <div className='bg-muted/40 text-muted-foreground flex aspect-video flex-col items-center justify-center rounded-md border px-3 text-center text-sm'>
+              <p>{t('Video URL unavailable')}</p>
+            </div>
           ) : null}
         </div>
       </div>

@@ -26,6 +26,7 @@ type fakeMediaS3 struct {
 	headErr      error
 	putErr       error
 	putKeys      []string
+	putSizes     []int64
 	deleted      []string
 	copyErr      error
 	copyErrBySrc map[string]error
@@ -52,6 +53,7 @@ func (f *fakeMediaS3) Put(ctx context.Context, key, contentType string, body io.
 		_, _ = io.Copy(io.Discard, body)
 	}
 	f.putKeys = append(f.putKeys, key)
+	f.putSizes = append(f.putSizes, size)
 	return f.putErr
 }
 

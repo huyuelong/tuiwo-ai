@@ -413,9 +413,11 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 		return
 	}
 
-	// 通用 TaskDto 格式；优先签发自有转存对象的预签名 URL
+	// 通用 TaskDto 格式；有归档对象时签发预签名 URL，否则保留原 ResultURL（如 content 代理）
 	taskDto := TaskModel2Dto(originTask)
-	taskDto.ResultURL = service.ResolveTaskResultURL(c.Request.Context(), originTask)
+	if signed := service.ResolveTaskResultURL(c.Request.Context(), originTask); signed != "" {
+		taskDto.ResultURL = signed
+	}
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
 		Data: taskDto,
@@ -551,26 +553,27 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 	return &dto.TaskDto{
-		ID:         task.ID,
-		CreatedAt:  task.CreatedAt,
-		UpdatedAt:  task.UpdatedAt,
-		TaskID:     task.TaskID,
-		Platform:   string(task.Platform),
-		UserId:     task.UserId,
-		Group:      task.Group,
-		ChannelId:  task.ChannelId,
-		Quota:      task.Quota,
-		Action:     task.Action,
-		TaskType:   task.TaskType,
-		Status:     string(task.Status),
-		FailReason: task.FailReason,
-		ResultURL:  task.GetResultURL(),
-		SubmitTime: task.SubmitTime,
-		StartTime:  task.StartTime,
-		FinishTime: task.FinishTime,
-		Progress:   task.Progress,
-		Properties: task.Properties,
-		Username:   task.Username,
-		Data:       task.Data,
+		ID:              task.ID,
+		CreatedAt:       task.CreatedAt,
+		UpdatedAt:       task.UpdatedAt,
+		TaskID:          task.TaskID,
+		Platform:        string(task.Platform),
+		UserId:          task.UserId,
+		Group:           task.Group,
+		ChannelId:       task.ChannelId,
+		Quota:           task.Quota,
+		Action:          task.Action,
+		TaskType:        task.TaskType,
+		Status:          string(task.Status),
+		FailReason:      task.FailReason,
+		ResultURL:       task.GetResultURL(),
+		StoredResultKey: strings.TrimSpace(task.PrivateData.StoredResultKey),
+		SubmitTime:      task.SubmitTime,
+		StartTime:       task.StartTime,
+		FinishTime:      task.FinishTime,
+		Progress:        task.Progress,
+		Properties:      task.Properties,
+		Username:        task.Username,
+		Data:            task.Data,
 	}
 }
