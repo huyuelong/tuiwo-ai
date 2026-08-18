@@ -42,8 +42,15 @@ describe('video profile registry', () => {
       'gpt-4o',
       'wan3.0-video',
       'wan2.5-t2v-preview',
+      'seedance-2.0-fast',
       'sora-2',
     ])
-    assert.deepEqual(models, ['wan3.0-video'])
+    assert.deepEqual(models, ['wan3.0-video', 'seedance-2.0-fast'])
+  })
+
+  test('resolves seedance-2.0-fast to the Seedance20 profile', () => {
+    const profile = resolveVideoProfile('seedance-2.0-fast')
+    assert.ok(profile)
+    assert.equal(profile.id, 'seedance20')
   })
 })

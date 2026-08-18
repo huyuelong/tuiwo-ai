@@ -28,6 +28,7 @@ import {
   resolveStatusLabelKey,
   resolveStatusToneClass,
   resolveTaskModeLabelKey,
+  resolveTaskMediaItemUrl,
   resolveTaskModelName,
   truncateTaskId,
 } from '../parse-task-input'
@@ -230,5 +231,42 @@ describe('groupTaskMedia', () => {
     })
     assert.equal(groups.firstFrame.length, 1)
     assert.equal(groups.referenceAudios.length, 1)
+  })
+})
+
+describe('resolveTaskMediaItemUrl', () => {
+  test('uses presigned url for uploaded media with object_key', () => {
+    assert.equal(
+      resolveTaskMediaItemUrl(
+        {
+          type: 'first_frame',
+          url: 'https://expired',
+          object_key: 'media-task-assets/1/t/0.png',
+        },
+        { 'media-task-assets/1/t/0.png': 'https://signed/0.png' }
+      ),
+      'https://signed/0.png'
+    )
+  })
+
+  test('returns empty for object_key media when presign missing', () => {
+    assert.equal(
+      resolveTaskMediaItemUrl({
+        type: 'first_frame',
+        url: 'https://expired',
+        object_key: 'media-task-assets/1/t/0.png',
+      }),
+      ''
+    )
+  })
+
+  test('uses snapshot url for url-only media', () => {
+    assert.equal(
+      resolveTaskMediaItemUrl({
+        type: 'reference_image',
+        url: 'https://cdn.example.com/ref.jpg',
+      }),
+      'https://cdn.example.com/ref.jpg'
+    )
   })
 })

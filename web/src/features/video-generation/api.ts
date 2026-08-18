@@ -41,6 +41,8 @@ export async function submitVideoGeneration(
 ): Promise<VideoSubmitResponse> {
   const res = await api.post(API_ENDPOINTS.VIDEO_GENERATIONS, payload, {
     signal,
+    // Upstream channel 401 must not trigger session refresh / sign-out.
+    skipAuthRefresh: true,
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data
@@ -54,6 +56,7 @@ export async function fetchVideoTask(
     `${API_ENDPOINTS.VIDEO_GENERATIONS}/${encodeURIComponent(taskId)}`,
     {
       signal,
+      skipAuthRefresh: true,
       skipErrorHandler: true,
     } as Record<string, unknown>
   )

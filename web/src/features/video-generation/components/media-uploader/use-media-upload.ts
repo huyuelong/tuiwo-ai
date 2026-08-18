@@ -25,6 +25,7 @@ import {
   initiateMediaUpload,
 } from '../../media-api'
 import type { MediaAsset, MediaCategory } from '../../profiles/types'
+import { validateMediaUrlForCategory } from './url-media-validation'
 import { xhrPutFile } from './xhr-put'
 
 type UploadItemState = {
@@ -225,6 +226,11 @@ export function useMediaUpload(options: UseMediaUploadOptions) {
         new URL(url)
       } catch {
         toast.error(t('Please enter a valid URL'))
+        return
+      }
+      const categoryCheck = validateMediaUrlForCategory(url, options.category)
+      if (!categoryCheck.ok) {
+        toast.error(t(categoryCheck.messageKey))
         return
       }
       if (options.value.length >= options.maxCount) {

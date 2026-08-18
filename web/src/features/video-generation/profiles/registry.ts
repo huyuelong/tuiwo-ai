@@ -17,10 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { AnyVideoModelProfile } from './types'
+import { seedance20Profile } from './seedance20'
 import { wan30Profile } from './wan30'
 
 /** 已注册的视频生成 Profile。后续新模型只在此追加。 */
-export const VIDEO_PROFILES: readonly AnyVideoModelProfile[] = [wan30Profile]
+export const VIDEO_PROFILES: readonly AnyVideoModelProfile[] = [
+  wan30Profile,
+  seedance20Profile,
+]
 
 export function resolveVideoProfile(
   model: string

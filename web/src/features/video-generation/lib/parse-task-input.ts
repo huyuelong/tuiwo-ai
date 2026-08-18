@@ -207,3 +207,17 @@ export function groupTaskMedia(
   }
   return groups
 }
+
+/** 参考媒体 URL：有 object_key 时用预签名；纯 URL 媒体用快照直链。 */
+export function resolveTaskMediaItemUrl(
+  item: VideoMediaItem,
+  urlMap: Record<string, string> = {}
+): string {
+  const objectKey = item.object_key?.trim()
+  if (objectKey) {
+    const signed = urlMap[objectKey]?.trim()
+    if (signed) return signed
+    return ''
+  }
+  return item.url?.trim() || ''
+}

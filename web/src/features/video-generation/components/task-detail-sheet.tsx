@@ -41,12 +41,13 @@ import {
   parseTaskInput,
   resolveStatusLabelKey,
   resolveStatusToneClass,
+  resolveTaskMediaItemUrl,
   resolveTaskModeLabelKey,
   resolveTaskModelName,
   type TaskMediaGroups,
 } from '../lib/parse-task-input'
 import { collectTaskObjectKeys } from '../lib/task-object-keys'
-import type { VideoMediaItem, VideoTaskDto } from '../types'
+import type { VideoTaskDto } from '../types'
 
 type VideoTaskDetailSheetProps = {
   task: VideoTaskDto | null
@@ -87,18 +88,6 @@ function formatOptionalBoolean(
 ): string {
   if (value === undefined) return '-'
   return value ? t('Yes') : t('No')
-}
-
-function resolveMediaDisplayUrl(
-  item: VideoMediaItem,
-  urlMap: Record<string, string>
-): string {
-  const objectKey = item.object_key?.trim()
-  if (objectKey) {
-    const signed = urlMap[objectKey]?.trim()
-    if (signed) return signed
-  }
-  return ''
 }
 
 // 详情卡片参数行
@@ -344,13 +333,19 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
                   />
                 ) : null}
                 <DetailKvRow
-                  label={t('Audio')}
+                  label={t('Generate audio')}
                   value={formatOptionalBoolean(params?.audio, t)}
                 />
                 <DetailKvRow
                   label={t('Enable thinking')}
                   value={formatOptionalBoolean(params?.enable_thinking, t)}
                 />
+                {typeof params?.human_review === 'boolean' ? (
+                  <DetailKvRow
+                    label={t('Human review')}
+                    value={formatOptionalBoolean(params.human_review, t)}
+                  />
+                ) : null}
                 <DetailKvRow
                   label={t('Creation time')}
                   value={formatSubmitTime(task)}
@@ -386,7 +381,7 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
                       </h4>
                       <div className='space-y-3'>
                         {items.map((item, index) => {
-                          const url = resolveMediaDisplayUrl(item, urlMap)
+                          const url = resolveTaskMediaItemUrl(item, urlMap)
                           const objectKey = item.object_key?.trim() || ''
                           return (
                             <MediaPreview

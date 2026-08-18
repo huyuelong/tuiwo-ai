@@ -36,11 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
 import { MediaUploader } from '../../components/media-uploader'
+import { OptionSwitch } from '../../components/option-switch'
 import type { MediaAsset, ProfileFormProps } from '../types'
 import {
   WAN30_MEDIA_SLOTS,
@@ -296,25 +296,27 @@ export function Wan30FormFields(props: Wan30FormFieldsProps) {
         </FieldDescription>
       </Field>
 
-      <div className='flex flex-wrap gap-6'>
-        <div className='flex items-center gap-2'>
-          <Switch
-            checked={props.values.audio}
-            onCheckedChange={(checked) => update('audio', checked)}
-            disabled={props.disabled}
-            id='audio-switch'
-          />
-          <Label htmlFor='audio-switch'>{t('Audio')}</Label>
-        </div>
-        <div className='flex items-center gap-2'>
-          <Switch
-            checked={props.values.enableThinking}
-            onCheckedChange={(checked) => update('enableThinking', checked)}
-            disabled={props.disabled}
-            id='thinking-switch'
-          />
-          <Label htmlFor='thinking-switch'>{t('Enable thinking')}</Label>
-        </div>
+      <div className='flex flex-col gap-3'>
+        <OptionSwitch
+          id='wan30-audio-switch'
+          label={t('Generate audio')}
+          description={t(
+            'Include spoken audio or sound effects when supported'
+          )}
+          checked={props.values.audio}
+          disabled={props.disabled}
+          onCheckedChange={(checked) => update('audio', checked)}
+        />
+        <OptionSwitch
+          id='wan30-thinking-switch'
+          label={t('Enable thinking')}
+          description={t(
+            'Use deeper planning for better results when supported'
+          )}
+          checked={props.values.enableThinking}
+          disabled={props.disabled}
+          onCheckedChange={(checked) => update('enableThinking', checked)}
+        />
       </div>
     </div>
   )

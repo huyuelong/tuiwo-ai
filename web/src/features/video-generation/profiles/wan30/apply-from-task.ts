@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   parseTaskInput,
+  resolveTaskMediaItemUrl,
   resolveTaskModeLabelKey,
   resolveTaskModelName,
 } from '../../lib/parse-task-input'
@@ -32,7 +33,7 @@ import { createWan30DefaultValues, type Wan30FormValues } from './schema'
 export type MapWan30FromTaskResult = {
   model: string
   values: Wan30FormValues
-  /** 无 object_key 或预签名失败而跳过的媒体条数 */
+  /** 预签名失败的上传媒体条数（纯 URL 媒体不计入） */
   skippedMediaCount: number
 }
 
@@ -77,21 +78,31 @@ function guessMime(objectKey: string, mediaType: string): string {
 }
 
 /**
- * 仅接受带 object_key 且 urlMap 有预签名的项；无 key 的过期 URL 直接跳过。
+ * 上传媒体需 object_key + 预签名；纯 URL 媒体用快照中的 url。
  */
 function mediaItemToAsset(
   item: VideoMediaItem,
   urlMap: Record<string, string>
 ): MediaAsset | null {
-  const objectKey = item.object_key?.trim()
-  if (!objectKey) return null
-  const url = urlMap[objectKey]?.trim()
+  const url = resolveTaskMediaItemUrl(item, urlMap)
   if (!url) return null
+
+  const objectKey = item.object_key?.trim()
+  if (objectKey) {
+    return {
+      key: objectKey,
+      url,
+      name: basenameFromKey(objectKey),
+      mime: guessMime(objectKey, item.type),
+      size: 0,
+    }
+  }
+
+  const name = url.split('/').pop()?.split('?')[0] || url
   return {
-    key: objectKey,
     url,
-    name: basenameFromKey(objectKey),
-    mime: guessMime(objectKey, item.type),
+    name,
+    mime: guessMime(name, item.type),
     size: 0,
   }
 }

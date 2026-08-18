@@ -42,6 +42,7 @@ import {
   createWan30DefaultValues,
   mapWan30FormValuesFromTask,
 } from './profiles/wan30'
+import { mapSeedance20FormValuesFromTask } from './profiles/seedance20'
 import { presignMediaObjectKeys } from './media-api'
 import type { VideoTaskDto } from './types'
 
@@ -159,6 +160,54 @@ export function VideoGeneration() {
   }
 
   const handleApplyParameters = async (task: VideoTaskDto) => {
+    const seedancePreview = mapSeedance20FormValuesFromTask(task)
+    if (seedancePreview) {
+      const targetProfile = resolveVideoProfile(seedancePreview.model)
+      if (!targetProfile || targetProfile.id !== 'seedance20') {
+        toast.error(
+          t('This model is not supported in video generation yet.')
+        )
+        return
+      }
+      setApplyingParams(true)
+      try {
+        const modelAvailable = models.some(
+          (item) => item.value === seedancePreview.model
+        )
+        if (modelAvailable) {
+          const nextProfile = resolveVideoProfile(seedancePreview.model)
+          const currentProfile = resolveVideoProfile(model)
+          if (nextProfile?.id === currentProfile?.id) {
+            setModel(seedancePreview.model)
+            setProfileValues(seedancePreview.values)
+          } else {
+            pendingApplyValuesRef.current = seedancePreview.values
+            setModel(seedancePreview.model)
+          }
+        } else if (resolveVideoProfile(model)?.id !== 'seedance20') {
+          toast.error(
+            t('This model is not supported in video generation yet.')
+          )
+          return
+        } else {
+          setProfileValues(seedancePreview.values)
+        }
+        setDetailTask(null)
+        if (!modelAvailable) {
+          toast.warning(
+            t(
+              'Parameters applied. Model is not available in the current group.'
+            )
+          )
+        } else {
+          toast.success(t('Parameters applied'))
+        }
+      } finally {
+        setApplyingParams(false)
+      }
+      return
+    }
+
     const preview = mapWan30FormValuesFromTask(task, {})
     if (!preview) {
       toast.error(t('No parameter snapshot for this task'))

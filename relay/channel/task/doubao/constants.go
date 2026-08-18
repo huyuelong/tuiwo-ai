@@ -9,6 +9,8 @@ var ModelList = []string{
 	"doubao-seedance-1-5-pro-251215",
 	"doubao-seedance-2-0-260128",
 	"doubao-seedance-2-0-fast-260128",
+	"seedance-2.0",
+	"seedance-2.0-fast",
 }
 
 var ChannelName = "doubao-video"
@@ -33,6 +35,19 @@ var videoPriceTable = map[string]map[videoPriceKey]float64{
 		{is4k: true, hasVideo: true}:     16.0,
 	},
 	"doubao-seedance-2-0-fast-260128": {
+		{hasVideo: false}: 37.0,
+		{hasVideo: true}:  22.0,
+	},
+	// Submox 短名先复用官方 2.0 / fast 基准倍率；管理员可用 ModelRatio 覆盖单价。
+	"seedance-2.0": {
+		{hasVideo: false}:                46.0,
+		{hasVideo: true}:                 28.0,
+		{is1080p: true, hasVideo: false}: 51.0,
+		{is1080p: true, hasVideo: true}:  31.0,
+		{is4k: true, hasVideo: false}:    26.0,
+		{is4k: true, hasVideo: true}:     16.0,
+	},
+	"seedance-2.0-fast": {
 		{hasVideo: false}: 37.0,
 		{hasVideo: true}:  22.0,
 	},

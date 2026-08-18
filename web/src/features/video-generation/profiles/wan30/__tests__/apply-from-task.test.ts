@@ -117,7 +117,7 @@ describe('mapWan30FormValuesFromTask', () => {
     assert.equal(mapped.skippedMediaCount, 0)
   })
 
-  test('skips media without object_key even if url present', () => {
+  test('restores url-only media without object_key', () => {
     const mapped = mapWan30FormValuesFromTask(
       taskWithInput(
         {
@@ -129,19 +129,32 @@ describe('mapWan30FormValuesFromTask', () => {
               media: [
                 {
                   type: 'first_frame',
-                  url: 'https://only-url',
+                  url: 'https://cdn.example.com/frame.png',
+                },
+                {
+                  type: 'reference_image',
+                  url: 'https://cdn.example.com/ref.jpg',
+                },
+                {
+                  type: 'reference_video',
+                  url: 'https://cdn.example.com/ref.mp4',
                 },
               ],
             },
           },
         },
-        'firstTailGenerate'
+        'referenceGenerate'
       ),
       {}
     )
     assert.ok(mapped)
-    assert.equal(mapped.values.firstFrame.length, 0)
-    assert.equal(mapped.skippedMediaCount, 1)
+    assert.equal(mapped.values.referenceImages.length, 1)
+    assert.equal(
+      mapped.values.referenceImages[0].url,
+      'https://cdn.example.com/ref.jpg'
+    )
+    assert.equal(mapped.values.referenceVideos.length, 1)
+    assert.equal(mapped.skippedMediaCount, 0)
   })
 
   test('skips media when object_key missing from urlMap', () => {

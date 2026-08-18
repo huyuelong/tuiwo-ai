@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -49,6 +50,7 @@ type requestPayload struct {
 	ServiceTier           string         `json:"service_tier,omitempty"`
 	ExecutionExpiresAfter *dto.IntValue  `json:"execution_expires_after,omitempty"`
 	GenerateAudio         *dto.BoolValue `json:"generate_audio,omitempty"`
+	HumanReview           *dto.BoolValue `json:"human_review,omitempty"`
 	Draft                 *dto.BoolValue `json:"draft,omitempty"`
 	Tools                 []struct {
 		Type string `json:"type,omitempty"`
@@ -69,10 +71,11 @@ type responsePayload struct {
 }
 
 type responseTask struct {
-	ID      string `json:"id"`
-	Model   string `json:"model"`
-	Status  string `json:"status"`
-	Content struct {
+	ID       string `json:"id"`
+	Model    string `json:"model"`
+	Status   string `json:"status"`
+	VideoURL string `json:"video_url,omitempty"`
+	Content  struct {
 		VideoURL string `json:"video_url"`
 	} `json:"content"`
 	Seed            int    `json:"seed"`
@@ -142,7 +145,10 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 		return nil
 	}
 	hasVideo := hasVideoInMetadata(req.Metadata)
-	resolution, _ := req.Metadata["resolution"].(string)
+	resolution := metadataString(req.Metadata, "resolution")
+	if resolution == "" {
+		resolution = metadataParametersString(req.Metadata, "resolution")
+	}
 	ratio, ok := GetVideoInputRatio(info.OriginModelName, resolution, hasVideo)
 	if !ok || ratio == 1.0 {
 		return nil
@@ -293,9 +299,12 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 	if err := taskcommon.UnmarshalMetadata(metadata, &r); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
 	}
+	applyPlaygroundParameters(&r, metadata)
 
 	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
 		r.Duration = lo.ToPtr(dto.IntValue(sec))
+	} else if req.Duration > 0 && r.Duration == nil {
+		r.Duration = lo.ToPtr(dto.IntValue(req.Duration))
 	}
 
 	r.Content = lo.Reject(r.Content, func(c ContentItem, _ int) bool { return c.Type == "text" })
@@ -305,6 +314,97 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 	})
 
 	return &r, nil
+}
+
+func applyPlaygroundParameters(r *requestPayload, metadata map[string]interface{}) {
+	if r == nil || metadata == nil {
+		return
+	}
+	params, _ := metadata["parameters"].(map[string]interface{})
+	if params == nil {
+		return
+	}
+	if r.Ratio == "" {
+		if ratio := strings.TrimSpace(metadataValueString(params["ratio"])); ratio != "" {
+			r.Ratio = ratio
+		}
+	}
+	if r.Resolution == "" {
+		if resolution := strings.TrimSpace(metadataValueString(params["resolution"])); resolution != "" {
+			r.Resolution = resolution
+		}
+	}
+	if r.GenerateAudio == nil {
+		if v, ok := metadataValueBool(params["audio"]); ok {
+			r.GenerateAudio = lo.ToPtr(dto.BoolValue(v))
+		}
+	}
+	if r.HumanReview == nil {
+		if v, ok := metadataValueBool(params["human_review"]); ok && v {
+			r.HumanReview = lo.ToPtr(dto.BoolValue(true))
+		}
+	}
+	if r.Seed == nil {
+		if seed, ok := metadataValueInt(params["seed"]); ok {
+			r.Seed = lo.ToPtr(dto.IntValue(seed))
+		}
+	}
+}
+
+func metadataString(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	return strings.TrimSpace(metadataValueString(metadata[key]))
+}
+
+func metadataParametersString(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	params, _ := metadata["parameters"].(map[string]interface{})
+	if params == nil {
+		return ""
+	}
+	return strings.TrimSpace(metadataValueString(params[key]))
+}
+
+func metadataValueString(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	default:
+		return ""
+	}
+}
+
+func metadataValueBool(v interface{}) (bool, bool) {
+	switch t := v.(type) {
+	case bool:
+		return t, true
+	default:
+		return false, false
+	}
+}
+
+func metadataValueInt(v interface{}) (int, bool) {
+	switch t := v.(type) {
+	case float64:
+		return int(t), true
+	case int:
+		return t, true
+	case int64:
+		return int(t), true
+	default:
+		return 0, false
+	}
+}
+
+func resolveTaskVideoURL(task responseTask) string {
+	if url := strings.TrimSpace(task.Content.VideoURL); url != "" {
+		return url
+	}
+	return strings.TrimSpace(task.VideoURL)
 }
 
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
@@ -328,7 +428,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "succeeded":
 		taskResult.Status = model.TaskStatusSuccess
 		taskResult.Progress = "100%"
-		taskResult.Url = resTask.Content.VideoURL
+		taskResult.Url = resolveTaskVideoURL(resTask)
 		// 解析 usage 信息用于按倍率计费
 		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
 		taskResult.TotalTokens = resTask.Usage.TotalTokens
@@ -356,7 +456,7 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	openAIVideo.TaskID = originTask.TaskID
 	openAIVideo.Status = originTask.Status.ToVideoStatus()
 	openAIVideo.SetProgressStr(originTask.Progress)
-	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
+	openAIVideo.SetMetadata("url", resolveTaskVideoURL(dResp))
 	openAIVideo.CreatedAt = originTask.CreatedAt
 	openAIVideo.CompletedAt = originTask.UpdatedAt
 	openAIVideo.Model = originTask.Properties.OriginModelName
