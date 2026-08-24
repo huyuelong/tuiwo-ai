@@ -30,7 +30,7 @@ const (
 	MediaCategoryDocument = "document"
 
 	mediaPutURLExpiry = 10 * time.Minute
-	mediaGetURLExpiry = 24 * time.Hour
+	mediaGetURLExpiry = 24 * time.Hour // 预签名 GET 有效期；对象本身由桶前缀生命周期（MEDIA_OBJECT_RETENTION_DAYS）到期删除
 
 	defaultMediaKeyPrefix      = "media-uploads"
 	defaultMediaMaxImageMB     = 20

@@ -73,9 +73,35 @@ func (j *JSONValue) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// migratePrefillGroupNameIndex 清理 GORM 索引重命名失败后残留的 uk_prefill_name 约束/索引。
+// 可重复执行；PostgreSQL 使用 IF EXISTS，避免约束不存在时启动失败。
+func migratePrefillGroupNameIndex() error {
+	if !DB.Migrator().HasTable(&PrefillGroup{}) {
+		return nil
+	}
+	const orphanIndex = "uk_prefill_name"
+	migrator := DB.Migrator()
+	switch {
+	case common.UsingMainDatabase(common.DatabaseTypePostgreSQL):
+		if err := DB.Exec(`ALTER TABLE prefill_groups DROP CONSTRAINT IF EXISTS "` + orphanIndex + `"`).Error; err != nil {
+			return err
+		}
+		return DB.Exec(`DROP INDEX IF EXISTS "` + orphanIndex + `"`).Error
+	case common.UsingMainDatabase(common.DatabaseTypeMySQL):
+		if migrator.HasIndex(&PrefillGroup{}, orphanIndex) {
+			return migrator.DropIndex(&PrefillGroup{}, orphanIndex)
+		}
+		return nil
+	case common.UsingMainDatabase(common.DatabaseTypeSQLite):
+		return DB.Exec(`DROP INDEX IF EXISTS ` + orphanIndex).Error
+	default:
+		return nil
+	}
+}
+
 type PrefillGroup struct {
 	Id          int            `json:"id"`
-	Name        string         `json:"name" gorm:"size:64;not null;uniqueIndex:uk_prefill_name,where:deleted_at IS NULL"`
+	Name        string         `json:"name" gorm:"size:64;not null;uniqueIndex,where:deleted_at IS NULL"`
 	Type        string         `json:"type" gorm:"size:32;index;not null"`
 	Items       JSONValue      `json:"items" gorm:"type:json"`
 	Description string         `json:"description,omitempty" gorm:"type:varchar(255)"`

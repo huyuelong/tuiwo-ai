@@ -539,19 +539,24 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 			task.FinishTime = now
 		}
 		if taskResult.Url != "" {
-			objectKey, archiveErr := StoreTaskResultFromURL(ctx, task.UserId, task.TaskID, taskResult.Url)
-			if archiveErr != nil {
-				logger.LogError(ctx, fmt.Sprintf("Task %s store result failed: %v", task.TaskID, archiveErr))
-				task.Status = model.TaskStatusFailure
-				task.FailReason = fmt.Sprintf("failed to store video result: %v", archiveErr)
-				if quota != 0 {
-					shouldRefund = true
+			// 暂时直接使用上游结果 URL，不转存 MinIO/S3；恢复归档时取消下方注释并移除本段。
+			task.PrivateData.ResultURL = taskResult.Url
+			shouldSettle = true
+			/*
+				objectKey, archiveErr := StoreTaskResultFromURL(ctx, task.UserId, task.TaskID, taskResult.Url)
+				if archiveErr != nil {
+					logger.LogError(ctx, fmt.Sprintf("Task %s store result failed: %v", task.TaskID, archiveErr))
+					task.Status = model.TaskStatusFailure
+					task.FailReason = fmt.Sprintf("failed to store video result: %v", archiveErr)
+					if quota != 0 {
+						shouldRefund = true
+					}
+				} else {
+					task.PrivateData.StoredResultKey = objectKey
+					task.PrivateData.ResultURL = ""
+					shouldSettle = true
 				}
-			} else {
-				task.PrivateData.StoredResultKey = objectKey
-				task.PrivateData.ResultURL = ""
-				shouldSettle = true
-			}
+			*/
 		} else {
 			// 无结果 URL 的渠道（如 OpenAI/Sora）继续走内容代理；播放依赖上游 content 接口。
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)

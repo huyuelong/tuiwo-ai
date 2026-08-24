@@ -11,7 +11,7 @@ import (
 const mediaUploadCleanupInterval = time.Hour
 
 // StartMediaUploadCleanup 定期将过期 pending 标为 failed，释放日额度占用。
-// 仅主节点执行；对象删除依赖桶生命周期策略。
+// 仅主节点执行；对象删除依赖桶前缀生命周期（media-uploads / media-task-assets / media-results）。
 func StartMediaUploadCleanup() {
 	if !common.IsMasterNode {
 		return

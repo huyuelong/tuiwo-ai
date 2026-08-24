@@ -607,11 +607,15 @@ func RelayTask(c *gin.Context) {
 		if taskReq, err := relaycommon.GetTaskRequest(c); err == nil {
 			if raw, marshalErr := common.Marshal(taskReq); marshalErr == nil {
 				input := string(raw)
-				if promoted, promoErr := service.PromoteTaskMediaAssets(c.Request.Context(), relayInfo.UserId, task.TaskID, input); promoErr != nil {
-					common.SysError("promote task media assets: " + promoErr.Error())
-				} else {
-					input = promoted
-				}
+				// 暂时不复制到 media-task-assets，参考媒体保留在 media-uploads 前缀，由桶生命周期到期删除。
+				// 恢复长期绑定时取消下方注释并移除直接使用 input 的分支。
+				/*
+					if promoted, promoErr := service.PromoteTaskMediaAssets(c.Request.Context(), relayInfo.UserId, task.TaskID, input); promoErr != nil {
+						common.SysError("promote task media assets: " + promoErr.Error())
+					} else {
+						input = promoted
+					}
+				*/
 				task.Properties.Input = input
 			}
 		}

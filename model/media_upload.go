@@ -18,7 +18,7 @@ const (
 //
 // 清理说明：过期 pending 不会由后台自动删除对象。运维应：
 // 1）定期调用 CleanupExpiredPendingMediaUploads 将过期 pending 标为 failed；
-// 2）在 S3/OSS 桶上配置前缀生命周期（建议 7 天）清理孤儿对象。
+// 2）在 S3/OSS 桶上为 media-uploads / media-task-assets / media-results 前缀配置生命周期（默认 1 天，见 MEDIA_OBJECT_RETENTION_DAYS）。
 type MediaUpload struct {
 	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	UploadId     string `json:"upload_id" gorm:"type:varchar(64);uniqueIndex;not null"`

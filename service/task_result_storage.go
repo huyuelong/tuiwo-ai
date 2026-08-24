@@ -81,6 +81,7 @@ func EffectiveTaskResultURL(ctx context.Context, task *model.Task) string {
 }
 
 // StoreTaskResultFromURL 下载上游结果并写入自有对象存储，返回 object key。
+// 当前轮询路径暂时跳过归档（见 task_polling.go）；保留供后续恢复 MinIO/S3 转存。
 func StoreTaskResultFromURL(ctx context.Context, userId int, taskID, sourceURL string) (string, error) {
 	sourceURL = strings.TrimSpace(sourceURL)
 	if sourceURL == "" {

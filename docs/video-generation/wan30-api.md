@@ -1,6 +1,6 @@
 # Wan 3.0 视频生成 API
 
-模型名：`wan3.0-video`。底层对接阿里云 DashScope 通义万相 Wan 3.0 异步视频合成，请求语义与[官方文档](https://help.aliyun.com/zh/model-studio/developer-reference/video-generation-api)对齐。
+模型名：`wan3.0-video`。底层对接阿里云 DashScope 通义万相 Wan 3.0 异步视频合成。
 
 **Base URL**：`https://ai.tuiwo.vip`
 
@@ -18,12 +18,20 @@ Authorization: Bearer sk-xxx
 
 ## 接口一览
 
-| 方法 | 地址 | 说明 |
-| --- | --- | --- |
-| `POST` | `https://ai.tuiwo.vip/v1/video/generations` | 创建任务 |
-| `GET` | `https://ai.tuiwo.vip/v1/video/generations/:task_id` | 查询任务 |
-| `GET` | `https://ai.tuiwo.vip/v1/videos/:task_id` | 查询任务（OpenAI Video 格式） |
-| `GET` | `https://ai.tuiwo.vip/v1/videos/:task_id/content` | 下载成品视频 |
+
+| 方法     | 地址                                                   | 说明                    |
+| ------ | ---------------------------------------------------- | --------------------- |
+| `POST` | `https://ai.tuiwo.vip/v1/video/generations`          | 创建任务                  |
+| `GET`  | `https://ai.tuiwo.vip/v1/video/generations/:task_id` | 查询任务                  |
+| `GET`  | `https://ai.tuiwo.vip/v1/videos/:task_id`            | 查询任务（OpenAI Video 格式） |
+| `GET`  | `https://ai.tuiwo.vip/v1/videos/:task_id/content`    | 下载成品视频                |
+
+
+## 结果保留与下载时效
+
+平台**暂不长期保存**生成视频，任务成功后仅保留临时视频链接（`result_url`）。该链接有时效限制，**通常约为 24 小时**；超时后 `result_url` 可能失效，下载接口也可能返回 `502`。
+
+**建议**：任务 `SUCCESS` 后尽快调用 `GET /v1/videos/:task_id/content` **下载到本地持久保存**，不要依赖 `result_url` 做长期播放或分发。
 
 ## 快速测试
 
@@ -60,11 +68,13 @@ curl -sS "https://ai.tuiwo.vip/v1/video/generations/{task_id}" \
   -H "Authorization: Bearer sk-xxx"
 ```
 
-| `data.status` | 下一步 |
-| --- | --- |
-| `QUEUED` / `SUBMITTED` / `IN_PROGRESS` | 继续轮询 |
-| `SUCCESS` | 进入步骤 3 下载 |
-| `FAILURE` | 查看 `data.fail_reason` |
+
+| `data.status`                          | 下一步                   |
+| -------------------------------------- | --------------------- |
+| `QUEUED` / `SUBMITTED` / `IN_PROGRESS` | 继续轮询                  |
+| `SUCCESS`                              | 进入步骤 3 下载             |
+| `FAILURE`                              | 查看 `data.fail_reason` |
+
 
 ### 3. 下载视频
 
@@ -74,9 +84,9 @@ curl -L -o video.mp4 \
   -H "Authorization: Bearer sk-xxx"
 ```
 
-下载完成后用播放器打开 `video.mp4` 验证。若文件很小且无法播放，检查是否误下载了 JSON 错误（常见原因：未带 `Authorization` 或任务尚未 `SUCCESS`）。
+下载完成后用播放器打开 `video.mp4` 验证。若文件很小且无法播放，检查是否误下载了 JSON 错误（常见原因：未带 `Authorization`、任务尚未 `SUCCESS`，或链接已过期）。
 
-**通过标准**：创建 → 轮询至 `SUCCESS` → 下载得到可播放 MP4，即接口联调成功。
+**通过标准**：创建 → 轮询至 `SUCCESS` → **24 小时内**下载得到可播放 MP4，即接口联调成功。
 
 ## 创建任务
 
@@ -111,48 +121,56 @@ Content-Type: application/json
 }
 ```
 
-| 字段 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `model` | string | 是 | 固定 `wan3.0-video` |
-| `group` | string | 否 | 计费分组 |
-| `prompt` | string | 是 | 文本提示词 |
-| `duration` | int | 否 | 见「时长」 |
-| `metadata.parameters` | object | 否 | 生成参数 |
-| `metadata.input.media` | array | 否 | 媒体输入，见「媒体类型」 |
+
+| 字段                     | 类型     | 必填  | 说明                |
+| ---------------------- | ------ | --- | ----------------- |
+| `model`                | string | 是   | 固定 `wan3.0-video` |
+| `group`                | string | 否   | 计费分组              |
+| `prompt`               | string | 是   | 文本提示词             |
+| `duration`             | int    | 否   | 见「时长」             |
+| `metadata.parameters`  | object | 否   | 生成参数              |
+| `metadata.input.media` | array  | 否   | 媒体输入，见「媒体类型」      |
+
 
 **兼容写法**：顶层 `image` / `images[0]` 可代替 `first_frame`；`images[1]` 可代替 `last_frame`。顶层 `size: "720P"` 可代替 `metadata.parameters.resolution`。
 
 ### 生成参数 `metadata.parameters`
 
-| 字段 | 类型 | 默认 | 可选值 |
-| --- | --- | --- | --- |
-| `resolution` | string | `1080P` | `480P` / `720P` / `1080P` |
-| `ratio` | string | `adaptive` | `16:9` / `9:16` / `1:1` / `4:3` / `3:4` / `adaptive` |
-| `audio` | bool | — | 是否生成音频 |
-| `enable_thinking` | bool | — | 深度思考；使用 `file` / `link` 媒体时须为 `true` |
-| `seed` | int | 不传 | `0`–`2147483647`，不传则随机 |
+
+| 字段                | 类型     | 默认         | 可选值                                                  |
+| ----------------- | ------ | ---------- | ---------------------------------------------------- |
+| `resolution`      | string | `1080P`    | `480P` / `720P` / `1080P`                            |
+| `ratio`           | string | `adaptive` | `16:9` / `9:16` / `1:1` / `4:3` / `3:4` / `adaptive` |
+| `audio`           | bool   | —          | 是否生成音频                                               |
+| `enable_thinking` | bool   | —          | 深度思考；使用 `file` / `link` 媒体时须为 `true`                 |
+| `seed`            | int    | 不传         | `0`–`2147483647`，不传则随机                               |
+
 
 ### 时长 `duration`
 
-| 值 | 含义 |
-| --- | --- |
-| 省略 / `0` | 默认 5 秒 |
-| `2`–`30` | 固定时长（秒） |
-| `-1` | 智能时长（上游自动决定；预扣按 30 秒计，完成后按实际上游时长结算） |
+
+| 值        | 含义                                  |
+| -------- | ----------------------------------- |
+| 省略 / `0` | 默认 5 秒                              |
+| `2`–`30` | 固定时长（秒）                             |
+| `-1`     | 智能时长（上游自动决定；预扣按 30 秒计，完成后按实际时长结算） |
+
 
 ### 媒体类型 `metadata.input.media[]`
 
 每项须包含 `type` 与 `url`（公网可访问的 HTTP(S) 地址）。
 
-| `type` | 用途 | 数量上限 |
-| --- | --- | --- |
-| `first_frame` | 首帧图 | 1 |
-| `last_frame` | 尾帧图 | 1 |
-| `reference_image` | 参考图 | 10 |
-| `reference_video` | 参考视频 | 5 |
-| `reference_audio` | 参考音频 | 5 |
-| `file` | 参考文档（须 `enable_thinking=true`） | 1 |
-| `link` | 参考网页（须 `enable_thinking=true`） | 1 |
+
+| `type`            | 用途                             | 数量上限 |
+| ----------------- | ------------------------------ | ---- |
+| `first_frame`     | 首帧图                            | 1    |
+| `last_frame`      | 尾帧图                            | 1    |
+| `reference_image` | 参考图                            | 10   |
+| `reference_video` | 参考视频                           | 5    |
+| `reference_audio` | 参考音频                           | 5    |
+| `file`            | 参考文档（须 `enable_thinking=true`） | 1    |
+| `link`            | 参考网页（须 `enable_thinking=true`） | 1    |
+
 
 `file` 与 `link` **互斥**，且不能与首尾帧或其它参考媒体混用。
 
@@ -210,18 +228,20 @@ Authorization: Bearer sk-xxx
 }
 ```
 
-| `status` | 含义 |
-| --- | --- |
-| `QUEUED` / `SUBMITTED` | 排队中 |
-| `IN_PROGRESS` | 生成中 |
-| `SUCCESS` | 完成，`result_url` 为视频地址 |
-| `FAILURE` | 失败，见 `fail_reason` |
+
+| `status`               | 含义                                          |
+| ---------------------- | ------------------------------------------- |
+| `QUEUED` / `SUBMITTED` | 排队中                                         |
+| `IN_PROGRESS`          | 生成中                                         |
+| `SUCCESS`              | 完成，`result_url` 为临时视频地址（约 24 小时内有效，请及时下载） |
+| `FAILURE`              | 失败，见 `fail_reason`                          |
+
 
 **OpenAI 格式**：`GET https://ai.tuiwo.vip/v1/videos/:task_id` 返回 `status` 为 `queued` / `in_progress` / `completed` / `failed`；完成时视频 URL 在 `metadata.url`。
 
 ## 下载视频
 
-任务 `status` 为 `SUCCESS` 后，通过代理接口下载成品视频：
+任务 `status` 为 `SUCCESS` 后，通过代理接口下载成品视频。**请在完成后 24 小时内下载**；过期后需重新生成任务。
 
 ```http
 GET https://ai.tuiwo.vip/v1/videos/task_abc123/content
@@ -232,6 +252,7 @@ Authorization: Bearer sk-xxx
 
 - 必须携带与创建/查询任务相同的 `Authorization: Bearer sk-xxx` 头；缺少或无效时返回 JSON 错误（HTTP `401`），不会返回视频流。
 - 仅当任务存在、归属当前 API Key 对应用户且状态为 `SUCCESS` 时可下载。
+- 推荐通过本接口下载保存到本地；`result_url` 为上游临时地址，**不应作为长期存储方案**。
 
 **成功响应**
 
@@ -242,12 +263,14 @@ Authorization: Bearer sk-xxx
 
 **常见错误**
 
-| HTTP | 说明 |
-| --- | --- |
-| `400` | 任务尚未完成 |
-| `401` | 未鉴权或 API Key 无效 |
-| `404` | 任务不存在或不属于当前用户 |
-| `502` | 上游视频拉取失败 |
+
+| HTTP  | 说明                                |
+| ----- | --------------------------------- |
+| `400` | 任务尚未完成                            |
+| `401` | 未鉴权或 API Key 无效                   |
+| `404` | 任务不存在或不属于当前用户                     |
+| `502` | 上游视频拉取失败（常见原因：临时链接已过期，请重新生成并尽快下载） |
+
 
 错误响应为 JSON，例如：
 
@@ -381,3 +404,4 @@ Authorization: Bearer sk-xxx
 - 按视频秒数 × 分辨率倍率计费：`480P`=1×、`720P`=2×、`1080P`=4×。
 - `duration=-1` 预扣 30 秒，完成后按上游实际时长多退少补。
 - 单价以控制台模型定价为准。
+

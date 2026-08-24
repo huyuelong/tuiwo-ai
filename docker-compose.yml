@@ -139,12 +139,15 @@ services:
       mc mb --ignore-existing \"local/$${MEDIA_S3_BUCKET}\" &&
       mc anonymous set none \"local/$${MEDIA_S3_BUCKET}\" &&
       (mc ilm rule remove --all --force \"local/$${MEDIA_S3_BUCKET}\" || true) &&
-      mc ilm rule add --expire-days 7 --prefix \"media-uploads/\" \"local/$${MEDIA_S3_BUCKET}\"
+      mc ilm rule add --expire-days $${MEDIA_OBJECT_RETENTION_DAYS} --prefix \"media-uploads/\" \"local/$${MEDIA_S3_BUCKET}\" &&
+      mc ilm rule add --expire-days $${MEDIA_OBJECT_RETENTION_DAYS} --prefix \"media-task-assets/\" \"local/$${MEDIA_S3_BUCKET}\" &&
+      mc ilm rule add --expire-days $${MEDIA_OBJECT_RETENTION_DAYS} --prefix \"media-results/\" \"local/$${MEDIA_S3_BUCKET}\"
       "
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MEDIA_S3_BUCKET: ${MEDIA_S3_BUCKET:-media-uploads}
+      MEDIA_OBJECT_RETENTION_DAYS: ${MEDIA_OBJECT_RETENTION_DAYS:-1}
     networks:
       - new-api-network
 

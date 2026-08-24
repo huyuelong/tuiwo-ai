@@ -30,6 +30,7 @@ import {
   resolveTaskModeLabelKey,
   resolveTaskMediaItemUrl,
   resolveTaskModelName,
+  resolveTaskResultVideoUrl,
   truncateTaskId,
 } from '../parse-task-input'
 import type { VideoTaskDto } from '../../types'
@@ -267,6 +268,30 @@ describe('resolveTaskMediaItemUrl', () => {
         url: 'https://cdn.example.com/ref.jpg',
       }),
       'https://cdn.example.com/ref.jpg'
+    )
+  })
+})
+
+describe('resolveTaskResultVideoUrl', () => {
+  test('prefers presigned url when stored_result_key exists', () => {
+    assert.equal(
+      resolveTaskResultVideoUrl(
+        {
+          stored_result_key: 'media-results/1/a.mp4',
+          result_url: 'https://upstream.example/a.mp4',
+        },
+        { 'media-results/1/a.mp4': 'https://signed.example/a.mp4' }
+      ),
+      'https://signed.example/a.mp4'
+    )
+  })
+
+  test('falls back to upstream result_url when not archived', () => {
+    assert.equal(
+      resolveTaskResultVideoUrl({
+        result_url: 'https://upstream.example/a.mp4',
+      }),
+      'https://upstream.example/a.mp4'
     )
   })
 })

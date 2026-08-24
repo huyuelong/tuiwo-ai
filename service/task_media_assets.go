@@ -57,6 +57,7 @@ func shouldPromoteMediaObjectKey(objectKey, uploadPrefix, taskAssetPrefix string
 
 // PromoteTaskMediaAssets 将 media-uploads 下的参考媒体复制到 media-task-assets，
 // 并重写 metadata.input.media[].object_key。
+// 当前提交路径暂时跳过本函数（见 controller/relay.go）；保留供后续恢复任务绑定长期存储。
 // 单条复制失败时保留该条原 object_key 并继续；S3 不可用时返回原始 input。
 func PromoteTaskMediaAssets(ctx context.Context, userId int, taskID, inputJSON string) (string, error) {
 	inputJSON = strings.TrimSpace(inputJSON)

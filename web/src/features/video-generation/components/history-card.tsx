@@ -33,6 +33,7 @@ import {
   resolveStatusToneClass,
   resolveTaskModeLabelKey,
   resolveTaskModelName,
+  resolveTaskResultVideoUrl,
 } from '../lib/parse-task-input'
 import type { VideoTaskDto } from '../types'
 import { VideoDownloadButton } from './video-download-button'
@@ -86,9 +87,7 @@ export function VideoHistoryCard(props: VideoHistoryCardProps) {
   const resolution = params?.resolution?.trim() || '-'
   const ratio = params?.ratio?.trim() || '-'
   const resultKey = props.task.stored_result_key?.trim() || ''
-  const videoUrl = resultKey
-    ? props.mediaUrlMap?.[resultKey]?.trim() || ''
-    : ''
+  const videoUrl = resolveTaskResultVideoUrl(props.task, props.mediaUrlMap)
   const mediaPresigning = Boolean(props.mediaPresigning)
 
   const status = (props.task.status || '').trim().toUpperCase()

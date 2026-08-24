@@ -44,6 +44,7 @@ import {
   resolveTaskMediaItemUrl,
   resolveTaskModeLabelKey,
   resolveTaskModelName,
+  resolveTaskResultVideoUrl,
   type TaskMediaGroups,
 } from '../lib/parse-task-input'
 import { collectTaskObjectKeys } from '../lib/task-object-keys'
@@ -205,7 +206,7 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
       MEDIA_GROUP_SECTIONS.some((section) => groups[section.key].length > 0)
   )
   const resultKey = task?.stored_result_key?.trim() || ''
-  const resultUrl = resultKey ? urlMap[resultKey]?.trim() || '' : ''
+  const resultUrl = task ? resolveTaskResultVideoUrl(task, urlMap) : ''
   const durationText = formatConfiguredDuration(input?.duration)
   const resolution = params?.resolution?.trim() || '-'
   const ratio = params?.ratio?.trim() || '-'

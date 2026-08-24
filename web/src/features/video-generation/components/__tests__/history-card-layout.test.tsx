@@ -263,6 +263,31 @@ describe('video history card layout', () => {
     await unmountCard(rendered)
   })
 
+  test('plays success video from upstream result_url when not archived', async () => {
+    const rendered = await renderCard({
+      task: {
+        task_id: 'task_upstream',
+        status: 'SUCCESS',
+        action: 'textGenerate',
+        result_url: 'https://upstream.example.com/video.mp4',
+        properties: {
+          input: JSON.stringify({ prompt: 'ok', model: 'wan3.0-video' }),
+        },
+      },
+      onViewDetails: () => undefined,
+      onApplyParameters: () => undefined,
+    })
+
+    const video = rendered.container.querySelector('video')
+    assert.ok(video)
+    assert.equal(
+      video.getAttribute('src'),
+      'https://upstream.example.com/video.mp4'
+    )
+
+    await unmountCard(rendered)
+  })
+
   test('shows download video button for successful tasks', async () => {
     const rendered = await renderCard({
       task: {

@@ -241,3 +241,15 @@ export function resolveTaskMediaItemUrl(
   }
   return item.url?.trim() || ''
 }
+
+/** 结果视频播放 URL：优先自有存储预签名，否则回退上游 result_url。 */
+export function resolveTaskResultVideoUrl(
+  task: Pick<VideoTaskDto, 'stored_result_key' | 'result_url'>,
+  urlMap: Record<string, string> = {}
+): string {
+  const resultKey = task.stored_result_key?.trim()
+  if (resultKey) {
+    return urlMap[resultKey]?.trim() || ''
+  }
+  return task.result_url?.trim() || ''
+}
