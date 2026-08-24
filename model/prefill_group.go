@@ -3,6 +3,7 @@ package model
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 
@@ -73,27 +74,82 @@ func (j *JSONValue) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// migratePrefillGroupNameIndex 清理 GORM 索引重命名失败后残留的 uk_prefill_name 约束/索引。
-// 可重复执行；PostgreSQL 使用 IF EXISTS，避免约束不存在时启动失败。
+// migratePrefillGroupNameIndex 在 AutoMigrate 前手工对齐 prefill_groups.name 的部分唯一索引。
+//
+// GORM 的 MigrateColumnUnique 会在库中存在 UNIQUE 约束、模型却只有 uniqueIndex 时，
+// 尝试 DROP CONSTRAINT uni_prefill_groups_name；若生产库约束名不同或已不存在则会启动失败。
+// 此处先清理 name 列上所有遗留约束/索引，再创建 GORM 期望的 idx_prefill_groups_name。
 func migratePrefillGroupNameIndex() error {
 	if !DB.Migrator().HasTable(&PrefillGroup{}) {
 		return nil
 	}
-	const orphanIndex = "uk_prefill_name"
-	migrator := DB.Migrator()
+
+	const (
+		tableName  = "prefill_groups"
+		columnName = "name"
+		indexName  = "idx_prefill_groups_name"
+	)
+
+	legacyNames := []string{
+		"uk_prefill_name",
+		"uni_prefill_groups_name",
+		indexName,
+		"prefill_groups_name_key",
+	}
+
 	switch {
 	case common.UsingMainDatabase(common.DatabaseTypePostgreSQL):
-		if err := DB.Exec(`ALTER TABLE prefill_groups DROP CONSTRAINT IF EXISTS "` + orphanIndex + `"`).Error; err != nil {
-			return err
+		var constraintNames []string
+		if err := DB.Raw(`
+SELECT tc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.constraint_column_usage ccu
+  ON tc.constraint_schema = ccu.constraint_schema
+ AND tc.constraint_name = ccu.constraint_name
+WHERE tc.table_name = ?
+  AND tc.constraint_type = 'UNIQUE'
+  AND ccu.column_name = ?`, tableName, columnName).Scan(&constraintNames).Error; err != nil {
+			return fmt.Errorf("migrate prefill_groups name index: query constraints: %w", err)
 		}
-		return DB.Exec(`DROP INDEX IF EXISTS "` + orphanIndex + `"`).Error
+		for _, name := range append(legacyNames, constraintNames...) {
+			if name == "" {
+				continue
+			}
+			if err := DB.Exec(`ALTER TABLE prefill_groups DROP CONSTRAINT IF EXISTS "` + name + `"`).Error; err != nil {
+				return fmt.Errorf("migrate prefill_groups name index: drop constraint %s: %w", name, err)
+			}
+			if err := DB.Exec(`DROP INDEX IF EXISTS "` + name + `"`).Error; err != nil {
+				return fmt.Errorf("migrate prefill_groups name index: drop index %s: %w", name, err)
+			}
+		}
+		return DB.Exec(
+			`CREATE UNIQUE INDEX IF NOT EXISTS "` + indexName + `" ON prefill_groups (` + columnName + `) WHERE deleted_at IS NULL`,
+		).Error
+
 	case common.UsingMainDatabase(common.DatabaseTypeMySQL):
-		if migrator.HasIndex(&PrefillGroup{}, orphanIndex) {
-			return migrator.DropIndex(&PrefillGroup{}, orphanIndex)
+		migrator := DB.Migrator()
+		for _, name := range legacyNames {
+			if migrator.HasIndex(&PrefillGroup{}, name) {
+				if err := migrator.DropIndex(&PrefillGroup{}, name); err != nil {
+					return fmt.Errorf("migrate prefill_groups name index: drop index %s: %w", name, err)
+				}
+			}
+		}
+		if !migrator.HasIndex(&PrefillGroup{}, indexName) {
+			return migrator.CreateIndex(&PrefillGroup{}, indexName)
 		}
 		return nil
+
 	case common.UsingMainDatabase(common.DatabaseTypeSQLite):
-		return DB.Exec(`DROP INDEX IF EXISTS ` + orphanIndex).Error
+		for _, name := range legacyNames {
+			if err := DB.Exec(`DROP INDEX IF EXISTS ` + name).Error; err != nil {
+				return fmt.Errorf("migrate prefill_groups name index: drop index %s: %w", name, err)
+			}
+		}
+		return DB.Exec(
+			`CREATE UNIQUE INDEX IF NOT EXISTS ` + indexName + ` ON prefill_groups (` + columnName + `) WHERE deleted_at IS NULL`,
+		).Error
+
 	default:
 		return nil
 	}
