@@ -21,7 +21,7 @@ import type { z } from 'zod'
 
 import type { VideoMode, VideoSubmitRequest } from '../types'
 
-export type MediaCategory = 'image' | 'video' | 'audio'
+export type MediaCategory = 'image' | 'video' | 'audio' | 'document'
 
 /** 表单中的上传或 URL 媒体；上游请求只发送 `url`。 */
 export type MediaAsset = {
@@ -56,6 +56,7 @@ export type ProfileFormProps<TValues> = {
     max_image_mb: number
     max_audio_mb: number
     max_video_mb: number
+    max_document_mb: number
   } | null
 }
 

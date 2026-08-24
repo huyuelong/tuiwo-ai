@@ -34,6 +34,8 @@ export type TaskMediaGroups = {
   referenceImages: VideoMediaItem[]
   referenceVideos: VideoMediaItem[]
   referenceAudios: VideoMediaItem[]
+  sourceFile: VideoMediaItem[]
+  sourceLink: VideoMediaItem[]
 }
 
 // 解析任务输入
@@ -68,12 +70,22 @@ export function resolveTaskModelName(task: VideoTaskDto): string {
 export function resolveTaskModeLabelKey(task: VideoTaskDto): string {
   const action = (task.action || '').trim()
   if (action === 'firstTailGenerate') return 'First / last frame'
-  if (action === 'referenceGenerate') return 'Reference'
+  if (action === 'referenceGenerate') {
+    const input = parseTaskInput(task)
+    const media = input?.metadata?.input?.media || []
+    if (media.some((item) => item.type === 'file' || item.type === 'link')) {
+      return 'Document / Web'
+    }
+    return 'Reference'
+  }
   if (action === 'textGenerate' || !action) {
     const input = parseTaskInput(task)
     const media = input?.metadata?.input?.media || []
     if (media.some((item) => item.type === 'first_frame' || item.type === 'last_frame')) {
       return 'First / last frame'
+    }
+    if (media.some((item) => item.type === 'file' || item.type === 'link')) {
+      return 'Document / Web'
     }
     if (media.some((item) => item.type.startsWith('reference_'))) {
       return 'Reference'
@@ -185,6 +197,8 @@ export function groupTaskMedia(
     referenceImages: [],
     referenceVideos: [],
     referenceAudios: [],
+    sourceFile: [],
+    sourceLink: [],
   }
   for (const item of media) {
     switch (item.type) {
@@ -202,6 +216,12 @@ export function groupTaskMedia(
         break
       case 'reference_audio':
         groups.referenceAudios.push(item)
+        break
+      case 'file':
+        groups.sourceFile.push(item)
+        break
+      case 'link':
+        groups.sourceLink.push(item)
         break
     }
   }

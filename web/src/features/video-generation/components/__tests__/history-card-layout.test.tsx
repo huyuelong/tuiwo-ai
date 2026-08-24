@@ -74,6 +74,7 @@ await i18n.use(initReactI18next).init({
         'View details': 'View details',
         'Apply parameters': 'Apply parameters',
         'Applying…': 'Applying…',
+        'Download video': 'Download video',
         'Video URL unavailable': 'Video URL unavailable',
       },
     },
@@ -258,6 +259,43 @@ describe('video history card layout', () => {
     const video = rendered.container.querySelector('video')
     assert.ok(video)
     assert.equal(video.getAttribute('src'), 'https://cdn.example/signed.mp4')
+
+    await unmountCard(rendered)
+  })
+
+  test('shows download video button for successful tasks', async () => {
+    const rendered = await renderCard({
+      task: {
+        task_id: 'task_download',
+        status: 'SUCCESS',
+        action: 'referenceGenerate',
+        stored_result_key: 'media-results/1/a.mp4',
+        properties: {
+          input: JSON.stringify({ prompt: 'ok', model: 'wan3.0-video' }),
+        },
+      },
+      mediaUrlMap: {
+        'media-results/1/a.mp4': 'https://example.com/a.mp4',
+      },
+      onViewDetails: () => undefined,
+      onApplyParameters: () => undefined,
+    })
+
+    const download = Array.from(
+      rendered.container.querySelectorAll('button')
+    ).find((button) => button.textContent?.includes('Download video'))
+    assert.ok(download)
+
+    const actionBar = rendered.container.querySelector(
+      '.mt-auto.flex.flex-wrap.items-center.justify-between'
+    )
+    assert.ok(actionBar)
+    const leftGroup = actionBar?.firstElementChild
+    assert.ok(leftGroup)
+    assert.equal(leftGroup?.textContent?.includes('View details'), true)
+    assert.equal(leftGroup?.textContent?.includes('Apply parameters'), true)
+    assert.equal(leftGroup?.textContent?.includes('Download video'), false)
+    assert.equal(actionBar?.lastElementChild, download)
 
     await unmountCard(rendered)
   })

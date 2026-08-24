@@ -48,7 +48,10 @@ function isRatio(value: string): value is Ratio {
   return (WAN30_RATIO_OPTIONS as readonly string[]).includes(value)
 }
 
-function resolveMode(task: VideoTaskDto): VideoMode {
+function resolveMode(task: VideoTaskDto, media: VideoMediaItem[]): VideoMode {
+  if (media.some((item) => item.type === 'file' || item.type === 'link')) {
+    return 'source'
+  }
   const label = resolveTaskModeLabelKey(task)
   if (label === 'First / last frame') {
     return 'frames'
@@ -72,7 +75,16 @@ function guessMime(objectKey: string, mediaType: string): string {
   if (lower.endsWith('.webm')) return 'video/webm'
   if (lower.endsWith('.mp3')) return 'audio/mpeg'
   if (lower.endsWith('.wav')) return 'audio/wav'
+  if (lower.endsWith('.pdf')) return 'application/pdf'
+  if (lower.endsWith('.doc')) return 'application/msword'
+  if (lower.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+  if (lower.endsWith('.txt')) return 'text/plain'
+  if (lower.endsWith('.md')) return 'text/markdown'
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html'
   if (mediaType.includes('video')) return 'video/mp4'
+  if (mediaType === 'file') return 'application/octet-stream'
   if (mediaType.includes('audio')) return 'audio/mpeg'
   return 'application/octet-stream'
 }
@@ -178,31 +190,43 @@ export function mapWan30FormValuesFromTask(
   const refImages = mapMediaSlot(media, 'reference_image', 10, urlMap)
   const refVideos = mapMediaSlot(media, 'reference_video', 5, urlMap)
   const refAudios = mapMediaSlot(media, 'reference_audio', 5, urlMap)
+  const refFile = mapMediaSlot(media, 'file', 1, urlMap)
+  const linkItem = media.find((item) => item.type === 'link')
 
   const skippedMediaCount =
     first.skipped +
     last.skipped +
     refImages.skipped +
     refVideos.skipped +
-    refAudios.skipped
+    refAudios.skipped +
+    refFile.skipped
+
+  const mode = resolveMode(task, media)
+  const sourceKind =
+    linkItem?.url?.trim() ? 'link' : 'file'
 
   const values: Wan30FormValues = {
-    mode: resolveMode(task),
+    mode,
     prompt: snapshot.prompt?.trim() || '',
     duration,
     resolution,
     ratio,
     audio: typeof params?.audio === 'boolean' ? params.audio : defaults.audio,
     enableThinking:
-      typeof params?.enable_thinking === 'boolean'
-        ? params.enable_thinking
-        : defaults.enableThinking,
+      mode === 'source'
+        ? true
+        : typeof params?.enable_thinking === 'boolean'
+          ? params.enable_thinking
+          : defaults.enableThinking,
     seed,
     firstFrame: first.assets,
     lastFrame: last.assets,
     referenceImages: refImages.assets,
     referenceVideos: refVideos.assets,
     referenceAudios: refAudios.assets,
+    sourceKind,
+    referenceFile: refFile.assets,
+    referenceLinkUrl: linkItem?.url?.trim() || '',
   }
 
   return { model, values, skippedMediaCount }

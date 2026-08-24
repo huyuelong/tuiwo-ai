@@ -48,6 +48,28 @@ describe('wan30 form schema', () => {
     assert.equal(parsed.success, false)
   })
 
+  test('rejects source file mode without document', () => {
+    const parsed = wan30FormSchema.safeParse({
+      ...createWan30DefaultValues(),
+      mode: 'source',
+      sourceKind: 'file',
+      prompt: 'hello',
+    })
+    assert.equal(parsed.success, false)
+  })
+
+  test('accepts source link mode with valid URL', () => {
+    const parsed = wan30FormSchema.safeParse({
+      ...createWan30DefaultValues(),
+      mode: 'source',
+      sourceKind: 'link',
+      prompt: 'hello',
+      referenceLinkUrl: 'https://example.com/article',
+      enableThinking: true,
+    })
+    assert.equal(parsed.success, true)
+  })
+
   test('rejects duration outside 2-30', () => {
     const parsed = wan30FormSchema.safeParse({
       ...createWan30DefaultValues(),

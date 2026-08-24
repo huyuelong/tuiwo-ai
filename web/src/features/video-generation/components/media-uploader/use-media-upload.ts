@@ -44,6 +44,7 @@ type UseMediaUploadOptions = {
   disabled?: boolean
   value: MediaAsset[]
   onChange: (next: MediaAsset[]) => void
+  urlValidation?: 'category' | 'any'
 }
 
 /** 同批多文件上传并发上限，避免打满发起接口与日额度竞态 */
@@ -228,7 +229,11 @@ export function useMediaUpload(options: UseMediaUploadOptions) {
         toast.error(t('Please enter a valid URL'))
         return
       }
-      const categoryCheck = validateMediaUrlForCategory(url, options.category)
+      const categoryCheck = validateMediaUrlForCategory(
+        url,
+        options.category,
+        options.urlValidation ?? 'category'
+      )
       if (!categoryCheck.ok) {
         toast.error(t(categoryCheck.messageKey))
         return
@@ -245,6 +250,8 @@ export function useMediaUpload(options: UseMediaUploadOptions) {
         mime = 'video/*'
       } else if (options.category === 'audio') {
         mime = 'audio/*'
+      } else if (options.category === 'document') {
+        mime = 'application/octet-stream'
       }
       options.onChange([
         ...options.value,

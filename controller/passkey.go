@@ -86,7 +86,8 @@ func PasskeyRegisterBegin(c *gin.Context) {
 	waUser := passkeysvc.NewWebAuthnUser(user, credential)
 	var options []webauthnlib.RegistrationOption
 	if credential != nil {
-		descriptor := credential.ToWebAuthnCredential().Descriptor()
+		waCred := credential.ToWebAuthnCredential()
+		descriptor := waCred.Descriptor()
 		options = append(options, webauthnlib.WithExclusions([]protocol.CredentialDescriptor{descriptor}))
 	}
 

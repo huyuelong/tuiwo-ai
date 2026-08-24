@@ -32,7 +32,7 @@ function assetsToMedia(
   }))
 }
 
-/** 组装 Wan 3.0 的 /pg/video/generations 请求体。 */
+/** 组装 Wan 3.0 提交请求体。 */
 export function buildWan30SubmitRequest(args: {
   model: string
   group: string
@@ -80,6 +80,27 @@ export function buildWan30SubmitRequest(args: {
         ...request.metadata,
         input: { media },
       }
+    }
+    return request
+  }
+
+  if (values.mode === 'source') {
+    const media: VideoMediaItem[] = []
+    if (values.sourceKind === 'file') {
+      media.push(...assetsToMedia(values.referenceFile, 'file', 1))
+    } else {
+      const link = values.referenceLinkUrl.trim()
+      if (link) {
+        media.push({ type: 'link', url: link })
+      }
+    }
+    request.metadata = {
+      ...request.metadata,
+      parameters: {
+        ...request.metadata?.parameters,
+        enable_thinking: true,
+      },
+      input: media.length > 0 ? { media } : undefined,
     }
   }
 

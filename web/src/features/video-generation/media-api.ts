@@ -42,6 +42,7 @@ export async function getMediaUploadConfig(): Promise<MediaUploadConfig> {
       max_image_mb: 20,
       max_audio_mb: 100,
       max_video_mb: 500,
+      max_document_mb: 20,
       daily_bytes: 0,
       allowed_categories: [],
       put_url_expiry_sec: 600,

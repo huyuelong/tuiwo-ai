@@ -75,9 +75,10 @@ func TestValidateMediaUploadRequestMIMEAndSize(t *testing.T) {
 	t.Parallel()
 
 	cfg := MediaStorageConfig{
-		MaxImageMB: 20,
-		MaxAudioMB: 100,
-		MaxVideoMB: 500,
+		MaxImageMB:    20,
+		MaxAudioMB:    100,
+		MaxVideoMB:    500,
+		MaxDocumentMB: 20,
 	}
 
 	tests := []struct {
@@ -108,6 +109,13 @@ func TestValidateMediaUploadRequestMIMEAndSize(t *testing.T) {
 			contentType: "video/mp4",
 			sizeBytes:   int64(501) * 1024 * 1024,
 			wantErr:     true,
+		},
+		{
+			name:        "pdf document ok",
+			filename:    "a.pdf",
+			contentType: "application/pdf",
+			sizeBytes:   1024,
+			wantCat:     MediaCategoryDocument,
 		},
 		{
 			name:        "unsupported mime",

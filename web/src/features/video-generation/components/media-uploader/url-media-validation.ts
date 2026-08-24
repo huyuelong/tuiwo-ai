@@ -47,7 +47,27 @@ const AUDIO_EXTENSIONS = new Set([
   'mpeg',
 ])
 
-const CATEGORY_MISMATCH_MESSAGE_KEY: Record<MediaCategory, string> = {
+const DOCUMENT_EXTENSIONS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'txt',
+  'md',
+  'html',
+  'htm',
+  'ppt',
+  'pptx',
+  'xls',
+  'xlsx',
+  'csv',
+  'rtf',
+  'epub',
+])
+
+const CATEGORY_MISMATCH_MESSAGE_KEY: Record<
+  Exclude<MediaCategory, 'document'>,
+  string
+> = {
   image: 'URL must point to an image file',
   video: 'URL must point to a video file',
   audio: 'URL must point to an audio file',
@@ -77,6 +97,8 @@ function extensionMatchesCategory(
       return VIDEO_EXTENSIONS.has(extension)
     case 'audio':
       return AUDIO_EXTENSIONS.has(extension)
+    case 'document':
+      return DOCUMENT_EXTENSIONS.has(extension)
     default:
       return false
   }
@@ -84,11 +106,45 @@ function extensionMatchesCategory(
 
 export function validateMediaUrlForCategory(
   url: string,
-  category: MediaCategory
+  category: MediaCategory,
+  mode: 'category' | 'any' = 'category'
 ): { ok: true } | { ok: false; messageKey: string } {
+  if (mode === 'any') {
+    try {
+      // eslint-disable-next-line no-new
+      new URL(url)
+      return { ok: true }
+    } catch {
+      return { ok: false, messageKey: 'Please enter a valid URL' }
+    }
+  }
+
+  if (category === 'document') {
+    const extension = extractUrlPathExtension(url)
+    if (extension && !extensionMatchesCategory(extension, category)) {
+      return {
+        ok: false,
+        messageKey: 'URL must point to a supported document file',
+      }
+    }
+    try {
+      // eslint-disable-next-line no-new
+      new URL(url)
+      return { ok: true }
+    } catch {
+      return { ok: false, messageKey: 'Please enter a valid URL' }
+    }
+  }
+
   const extension = extractUrlPathExtension(url)
   if (!extensionMatchesCategory(extension, category)) {
-    return { ok: false, messageKey: CATEGORY_MISMATCH_MESSAGE_KEY[category] }
+    return {
+      ok: false,
+      messageKey:
+        CATEGORY_MISMATCH_MESSAGE_KEY[
+          category as Exclude<MediaCategory, 'document'>
+        ],
+    }
   }
   return { ok: true }
 }

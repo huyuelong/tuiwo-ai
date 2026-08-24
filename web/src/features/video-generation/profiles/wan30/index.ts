@@ -36,7 +36,7 @@ export const wan30Profile: VideoModelProfile<Wan30FormValues> = {
     const name = model.trim().toLowerCase()
     return name === WAN30_MODEL_ID || name.startsWith('wan3.0')
   },
-  supportedModes: ['text', 'frames', 'reference'],
+  supportedModes: ['text', 'frames', 'reference', 'source'],
   mediaSlots: WAN30_MEDIA_SLOTS,
   createDefaultValues: createWan30DefaultValues,
   schema: wan30FormSchema,

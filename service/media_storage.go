@@ -24,17 +24,19 @@ import (
 )
 
 const (
-	MediaCategoryImage = "image"
-	MediaCategoryAudio = "audio"
-	MediaCategoryVideo = "video"
+	MediaCategoryImage    = "image"
+	MediaCategoryAudio    = "audio"
+	MediaCategoryVideo    = "video"
+	MediaCategoryDocument = "document"
 
 	mediaPutURLExpiry = 10 * time.Minute
 	mediaGetURLExpiry = 24 * time.Hour
 
-	defaultMediaKeyPrefix     = "media-uploads"
-	defaultMediaMaxImageMB    = 20
-	defaultMediaMaxAudioMB    = 100
-	defaultMediaMaxVideoMB    = 500
+	defaultMediaKeyPrefix      = "media-uploads"
+	defaultMediaMaxImageMB     = 20
+	defaultMediaMaxAudioMB     = 100
+	defaultMediaMaxVideoMB     = 500
+	defaultMediaMaxDocumentMB  = 20
 	defaultMediaDailyBytes    = int64(2147483648) // 2 GiB
 	defaultMediaRegion        = "us-east-1"
 	maxMediaFilenameLen       = 200
@@ -64,6 +66,7 @@ type MediaStorageConfig struct {
 	MaxImageMB     int
 	MaxAudioMB     int
 	MaxVideoMB     int
+	MaxDocumentMB  int
 	DailyBytes     int64
 }
 
@@ -207,6 +210,7 @@ func readMediaStorageConfig() MediaStorageConfig {
 		MaxImageMB:     common.GetEnvOrDefault("MEDIA_UPLOAD_MAX_IMAGE_MB", defaultMediaMaxImageMB),
 		MaxAudioMB:     common.GetEnvOrDefault("MEDIA_UPLOAD_MAX_AUDIO_MB", defaultMediaMaxAudioMB),
 		MaxVideoMB:     common.GetEnvOrDefault("MEDIA_UPLOAD_MAX_VIDEO_MB", defaultMediaMaxVideoMB),
+		MaxDocumentMB:  common.GetEnvOrDefault("MEDIA_UPLOAD_MAX_DOCUMENT_MB", defaultMediaMaxDocumentMB),
 		DailyBytes:     getEnvOrDefaultInt64("MEDIA_UPLOAD_DAILY_BYTES", defaultMediaDailyBytes),
 	}
 }
@@ -245,6 +249,8 @@ func (cfg MediaStorageConfig) MaxBytesForCategory(category string) int64 {
 		mb = cfg.MaxAudioMB
 	case MediaCategoryVideo:
 		mb = cfg.MaxVideoMB
+	case MediaCategoryDocument:
+		mb = cfg.MaxDocumentMB
 	default:
 		return 0
 	}
@@ -262,8 +268,9 @@ func MediaUploadConfigResponse() dto.MediaUploadConfigResponse {
 		MaxImageMB:        cfg.MaxImageMB,
 		MaxAudioMB:        cfg.MaxAudioMB,
 		MaxVideoMB:        cfg.MaxVideoMB,
+		MaxDocumentMB:     cfg.MaxDocumentMB,
 		DailyBytes:        cfg.DailyBytes,
-		AllowedCategories: []string{MediaCategoryImage, MediaCategoryAudio, MediaCategoryVideo},
+		AllowedCategories: []string{MediaCategoryImage, MediaCategoryAudio, MediaCategoryVideo, MediaCategoryDocument},
 		PutURLExpirySec:   int(mediaPutURLExpiry / time.Second),
 		GetURLExpirySec:   int(mediaGetURLExpiry / time.Second),
 	}
@@ -321,7 +328,7 @@ func newAWSMediaS3Client(cfg MediaStorageConfig) (*awsMediaS3Client, error) {
 	}, nil
 }
 
-// ClassifyMediaContentType 将 MIME 归类为 image/audio/video，无法识别则返回空串。
+// ClassifyMediaContentType 将 MIME 归类为 image/audio/video/document，无法识别则返回空串。
 func ClassifyMediaContentType(contentType string) string {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
 	if ct == "" {
@@ -337,6 +344,10 @@ func ClassifyMediaContentType(contentType string) string {
 		return MediaCategoryAudio
 	case strings.HasPrefix(ct, "video/"):
 		return MediaCategoryVideo
+	case ct == "application/pdf",
+		strings.HasPrefix(ct, "text/"),
+		strings.HasPrefix(ct, "application/vnd."):
+		return MediaCategoryDocument
 	default:
 		return ""
 	}

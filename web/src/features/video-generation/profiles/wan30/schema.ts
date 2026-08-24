@@ -34,7 +34,7 @@ const mediaAssetSchema = z.object({
 
 export const wan30FormSchema = z
   .object({
-    mode: z.enum(['text', 'frames', 'reference']),
+    mode: z.enum(['text', 'frames', 'reference', 'source']),
     prompt: z.string().trim().min(1, 'Please enter a prompt'),
     // -1：智能时长；其它为 2–30 秒
     duration: z
@@ -54,6 +54,9 @@ export const wan30FormSchema = z
     referenceImages: z.array(mediaAssetSchema).max(10),
     referenceVideos: z.array(mediaAssetSchema).max(5),
     referenceAudios: z.array(mediaAssetSchema).max(5),
+    sourceKind: z.enum(['file', 'link']),
+    referenceFile: z.array(mediaAssetSchema).max(1),
+    referenceLinkUrl: z.string(),
   })
   .superRefine((values, ctx) => {
     if (values.mode === 'frames') {
@@ -78,6 +81,37 @@ export const wan30FormSchema = z
         })
       }
     }
+    if (values.mode === 'source') {
+      if (values.sourceKind === 'file') {
+        if (values.referenceFile.length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Provide a document file or URL',
+            path: ['referenceFile'],
+          })
+        }
+      } else {
+        const link = values.referenceLinkUrl.trim()
+        if (!link) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Provide a web page URL',
+            path: ['referenceLinkUrl'],
+          })
+          return
+        }
+        try {
+          // eslint-disable-next-line no-new
+          new URL(link)
+        } catch {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Please enter a valid URL',
+            path: ['referenceLinkUrl'],
+          })
+        }
+      }
+    }
   })
 
 export type Wan30FormValues = z.infer<typeof wan30FormSchema>
@@ -97,5 +131,8 @@ export function createWan30DefaultValues(): Wan30FormValues {
     referenceImages: [],
     referenceVideos: [],
     referenceAudios: [],
+    sourceKind: 'file',
+    referenceFile: [],
+    referenceLinkUrl: '',
   }
 }

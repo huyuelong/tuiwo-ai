@@ -176,6 +176,13 @@ func VideoProxy(c *gin.Context) {
 	}
 
 	c.Writer.Header().Set("Cache-Control", "public, max-age=86400")
+	if c.Writer.Header().Get("Content-Type") == "" {
+		c.Writer.Header().Set("Content-Type", "video/mp4")
+	}
+	c.Writer.Header().Set(
+		"Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s.mp4"`, taskID),
+	)
 	c.Writer.WriteHeader(resp.StatusCode)
 	if _, err = io.Copy(c.Writer, resp.Body); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream video content: %s", err.Error()))
@@ -210,6 +217,10 @@ func writeVideoDataURL(c *gin.Context, dataURL string) error {
 
 	c.Writer.Header().Set("Content-Type", mimeType)
 	c.Writer.Header().Set("Cache-Control", "public, max-age=86400")
+	c.Writer.Header().Set(
+		"Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s.mp4"`, c.Param("task_id")),
+	)
 	c.Writer.WriteHeader(http.StatusOK)
 	_, err = c.Writer.Write(videoBytes)
 	return err

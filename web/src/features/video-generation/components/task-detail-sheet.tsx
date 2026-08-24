@@ -48,6 +48,7 @@ import {
 } from '../lib/parse-task-input'
 import { collectTaskObjectKeys } from '../lib/task-object-keys'
 import type { VideoTaskDto } from '../types'
+import { VideoDownloadButton } from './video-download-button'
 
 type VideoTaskDetailSheetProps = {
   task: VideoTaskDto | null
@@ -60,7 +61,7 @@ type VideoTaskDetailSheetProps = {
 type MediaGroupSection = {
   key: keyof TaskMediaGroups
   labelKey: string
-  kind: 'image' | 'video' | 'audio'
+  kind: 'image' | 'video' | 'audio' | 'url'
 }
 
 const MEDIA_GROUP_SECTIONS: MediaGroupSection[] = [
@@ -69,6 +70,8 @@ const MEDIA_GROUP_SECTIONS: MediaGroupSection[] = [
   { key: 'referenceImages', labelKey: 'Reference images', kind: 'image' },
   { key: 'referenceVideos', labelKey: 'Reference videos', kind: 'video' },
   { key: 'referenceAudios', labelKey: 'Reference audios', kind: 'audio' },
+  { key: 'sourceFile', labelKey: 'Reference document', kind: 'url' },
+  { key: 'sourceLink', labelKey: 'Web page URL', kind: 'url' },
 ]
 
 function formatSubmitTime(task: VideoTaskDto): string {
@@ -383,6 +386,16 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
                         {items.map((item, index) => {
                           const url = resolveTaskMediaItemUrl(item, urlMap)
                           const objectKey = item.object_key?.trim() || ''
+                          if (section.kind === 'url') {
+                            const displayUrl = url || item.url?.trim() || '-'
+                            return (
+                              <DetailKvRow
+                                key={`${section.key}-${item.object_key || item.url || index}`}
+                                label={t(section.labelKey)}
+                                value={displayUrl}
+                              />
+                            )
+                          }
                           return (
                             <MediaPreview
                               key={`${section.key}-${item.object_key || item.url || index}`}
@@ -403,7 +416,12 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
 
             {isSuccess && resultUrl ? (
               <div className='space-y-2'>
-                <h3 className='text-sm font-medium'>{t('Result video')}</h3>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <h3 className='text-sm font-medium'>{t('Result video')}</h3>
+                  {task?.task_id ? (
+                    <VideoDownloadButton taskId={task.task_id} />
+                  ) : null}
+                </div>
                 <video
                   className='aspect-video w-full rounded-md border bg-black'
                   src={resultUrl}
@@ -428,7 +446,12 @@ export function VideoTaskDetailSheet(props: VideoTaskDetailSheetProps) {
 
             {isSuccess && !resultUrl && !(resultKey && presigning) ? (
               <div className='space-y-2'>
-                <h3 className='text-sm font-medium'>{t('Result video')}</h3>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <h3 className='text-sm font-medium'>{t('Result video')}</h3>
+                  {task?.task_id ? (
+                    <VideoDownloadButton taskId={task.task_id} />
+                  ) : null}
+                </div>
                 <div className='bg-muted/40 text-muted-foreground flex aspect-video flex-col items-center justify-center rounded-md border px-3 text-center text-sm'>
                   <p>{t('Video URL unavailable')}</p>
                 </div>

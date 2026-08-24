@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export type VideoMode = 'text' | 'frames' | 'reference'
+export type VideoMode = 'text' | 'frames' | 'reference' | 'source'
 
 export type VideoMediaItem = {
   type: string
@@ -131,6 +131,7 @@ export type MediaUploadConfig = {
   max_image_mb: number
   max_audio_mb: number
   max_video_mb: number
+  max_document_mb: number
   daily_bytes: number
   allowed_categories: string[]
   put_url_expiry_sec: number

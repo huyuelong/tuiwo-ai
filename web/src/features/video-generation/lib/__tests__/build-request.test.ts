@@ -195,4 +195,50 @@ describe('buildWan30SubmitRequest', () => {
       referenceAudios: 5,
     })
   })
+
+  test('maps source file with forced enable_thinking', () => {
+    const payload = buildWan30SubmitRequest({
+      model: 'wan3.0-video',
+      group: 'default',
+      values: {
+        ...createWan30DefaultValues(),
+        mode: 'source',
+        sourceKind: 'file',
+        prompt: 'summarize',
+        enableThinking: false,
+        referenceFile: [
+          {
+            url: 'https://example.com/doc.pdf',
+            name: 'doc.pdf',
+            mime: 'application/pdf',
+            size: 0,
+          },
+        ],
+      },
+    })
+
+    assert.deepEqual(payload.metadata?.input?.media, [
+      { type: 'file', url: 'https://example.com/doc.pdf' },
+    ])
+    assert.equal(payload.metadata?.parameters?.enable_thinking, true)
+  })
+
+  test('maps source link with forced enable_thinking', () => {
+    const payload = buildWan30SubmitRequest({
+      model: 'wan3.0-video',
+      group: 'default',
+      values: {
+        ...createWan30DefaultValues(),
+        mode: 'source',
+        sourceKind: 'link',
+        prompt: 'from page',
+        referenceLinkUrl: 'https://example.com/page',
+      },
+    })
+
+    assert.deepEqual(payload.metadata?.input?.media, [
+      { type: 'link', url: 'https://example.com/page' },
+    ])
+    assert.equal(payload.metadata?.parameters?.enable_thinking, true)
+  })
 })

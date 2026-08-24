@@ -157,6 +157,51 @@ describe('mapWan30FormValuesFromTask', () => {
     assert.equal(mapped.skippedMediaCount, 0)
   })
 
+  test('maps source file and link snapshots', () => {
+    const fileMapped = mapWan30FormValuesFromTask(
+      taskWithInput(
+        {
+          model: 'wan3.0-video',
+          prompt: 'doc',
+          metadata: {
+            parameters: { enable_thinking: true },
+            input: {
+              media: [{ type: 'file', url: 'https://cdn.example.com/a.pdf' }],
+            },
+          },
+        },
+        'referenceGenerate'
+      ),
+      {}
+    )
+    assert.ok(fileMapped)
+    assert.equal(fileMapped.values.mode, 'source')
+    assert.equal(fileMapped.values.sourceKind, 'file')
+    assert.equal(fileMapped.values.referenceFile[0]?.url, 'https://cdn.example.com/a.pdf')
+    assert.equal(fileMapped.values.enableThinking, true)
+
+    const linkMapped = mapWan30FormValuesFromTask(
+      taskWithInput(
+        {
+          model: 'wan3.0-video',
+          prompt: 'page',
+          metadata: {
+            input: {
+              media: [{ type: 'link', url: 'https://example.com/page' }],
+            },
+          },
+        },
+        'referenceGenerate'
+      ),
+      {}
+    )
+    assert.ok(linkMapped)
+    assert.equal(linkMapped.values.mode, 'source')
+    assert.equal(linkMapped.values.sourceKind, 'link')
+    assert.equal(linkMapped.values.referenceLinkUrl, 'https://example.com/page')
+    assert.equal(linkMapped.values.enableThinking, true)
+  })
+
   test('skips media when object_key missing from urlMap', () => {
     const mapped = mapWan30FormValuesFromTask(
       taskWithInput({

@@ -44,6 +44,8 @@ export type MediaUploaderProps = {
   onChange: (next: MediaAsset[]) => void
   disabled?: boolean
   uploadEnabled: boolean
+  /** 文档槽位 URL 校验；网页链接在 source-input 单独输入 */
+  urlValidation?: 'category' | 'any'
 }
 
 function formatBytes(size: number): string {
@@ -76,6 +78,7 @@ export function MediaUploader(props: MediaUploaderProps) {
     disabled: props.disabled,
     value: props.value,
     onChange: props.onChange,
+    urlValidation: props.urlValidation,
   })
 
   const canAdd = remainingSlots > 0 && !props.disabled
@@ -287,7 +290,11 @@ function MediaPreview(props: {
       className='flex size-12 items-center justify-center rounded bg-muted text-xs text-muted-foreground'
       aria-hidden
     >
-      {props.category === 'audio' ? 'AUD' : 'FILE'}
+      {props.category === 'audio'
+        ? 'AUD'
+        : props.category === 'document'
+          ? 'DOC'
+          : 'FILE'}
     </div>
   )
 }

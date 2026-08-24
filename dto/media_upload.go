@@ -7,6 +7,7 @@ type MediaUploadConfigResponse struct {
 	MaxImageMB        int      `json:"max_image_mb"`
 	MaxAudioMB        int      `json:"max_audio_mb"`
 	MaxVideoMB        int      `json:"max_video_mb"`
+	MaxDocumentMB     int      `json:"max_document_mb"`
 	DailyBytes        int64    `json:"daily_bytes"`
 	AllowedCategories []string `json:"allowed_categories"`
 	PutURLExpirySec   int      `json:"put_url_expiry_sec"`

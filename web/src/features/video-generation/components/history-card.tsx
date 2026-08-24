@@ -35,6 +35,7 @@ import {
   resolveTaskModelName,
 } from '../lib/parse-task-input'
 import type { VideoTaskDto } from '../types'
+import { VideoDownloadButton } from './video-download-button'
 
 type VideoHistoryCardProps = {
   task: VideoTaskDto
@@ -184,31 +185,36 @@ export function VideoHistoryCard(props: VideoHistoryCardProps) {
             />
           </div>
 
-          <div className='mt-auto flex flex-wrap gap-2 pt-1'>
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              onClick={() => props.onViewDetails(props.task)}
-            >
-              {t('View details')}
-            </Button>
-            <Button
-              type='button'
-              variant='default'
-              size='sm'
-              disabled={props.applyingParameters}
-              onClick={() => props.onApplyParameters(props.task)}
-            >
-              {props.applyingParameters ? (
-                <>
-                  <Loader2 className='size-3.5 animate-spin' aria-hidden />
-                  {t('Applying…')}
-                </>
-              ) : (
-                t('Apply parameters')
-              )}
-            </Button>
+          <div className='mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-2 pt-1'>
+            <div className='flex flex-wrap gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => props.onViewDetails(props.task)}
+              >
+                {t('View details')}
+              </Button>
+              <Button
+                type='button'
+                variant='default'
+                size='sm'
+                disabled={props.applyingParameters}
+                onClick={() => props.onApplyParameters(props.task)}
+              >
+                {props.applyingParameters ? (
+                  <>
+                    <Loader2 className='size-3.5 animate-spin' aria-hidden />
+                    {t('Applying…')}
+                  </>
+                ) : (
+                  t('Apply parameters')
+                )}
+              </Button>
+            </div>
+            {isSuccess && taskId ? (
+              <VideoDownloadButton taskId={taskId} />
+            ) : null}
           </div>
         </div>
 

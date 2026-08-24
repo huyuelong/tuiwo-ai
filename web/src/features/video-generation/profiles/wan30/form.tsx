@@ -49,6 +49,7 @@ import {
   WAN30_SEED_MAX,
 } from './constants'
 import type { Wan30FormValues } from './schema'
+import { Wan30SourceInput } from './source-input'
 
 export type Wan30FormFieldsProps = ProfileFormProps<Wan30FormValues>
 
@@ -60,6 +61,7 @@ function maxBytesForCategory(
   if (category === 'image') return config.max_image_mb * 1024 * 1024
   if (category === 'audio') return config.max_audio_mb * 1024 * 1024
   if (category === 'video') return config.max_video_mb * 1024 * 1024
+  if (category === 'document') return config.max_document_mb * 1024 * 1024
   return undefined
 }
 
@@ -106,6 +108,7 @@ function setSlotAssets(
 
 export function Wan30FormFields(props: Wan30FormFieldsProps) {
   const { t } = useTranslation()
+  const thinkingRequired = props.values.mode === 'source'
 
   const update = <K extends keyof Wan30FormValues>(
     key: K,
@@ -124,11 +127,16 @@ export function Wan30FormFields(props: Wan30FormFieldsProps) {
         <Label>{t('Mode')}</Label>
         <Tabs
           value={props.values.mode}
-          onValueChange={(value) =>
-            update('mode', value as Wan30FormValues['mode'])
-          }
+          onValueChange={(value) => {
+            const mode = value as Wan30FormValues['mode']
+            props.onChange({
+              ...props.values,
+              mode,
+              enableThinking: mode === 'source' ? true : props.values.enableThinking,
+            })
+          }}
         >
-          <TabsList className='w-full'>
+          <TabsList className='grid w-full grid-cols-2 sm:grid-cols-4'>
             <TabsTrigger value='text' disabled={props.disabled}>
               {t('Text to video')}
             </TabsTrigger>
@@ -137,6 +145,9 @@ export function Wan30FormFields(props: Wan30FormFieldsProps) {
             </TabsTrigger>
             <TabsTrigger value='reference' disabled={props.disabled}>
               {t('Reference')}
+            </TabsTrigger>
+            <TabsTrigger value='source' disabled={props.disabled}>
+              {t('Document / Web')}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -153,6 +164,16 @@ export function Wan30FormFields(props: Wan30FormFieldsProps) {
           disabled={props.disabled}
         />
       </div>
+
+      {props.values.mode === 'source' ? (
+        <Wan30SourceInput
+          values={props.values}
+          disabled={props.disabled}
+          uploadEnabled={props.uploadEnabled}
+          maxDocumentBytes={maxBytesForCategory('document', props.uploadConfig)}
+          onChange={props.onChange}
+        />
+      ) : null}
 
       {visibleSlots.length > 0 ? (
         <div className='space-y-4'>
@@ -310,11 +331,13 @@ export function Wan30FormFields(props: Wan30FormFieldsProps) {
         <OptionSwitch
           id='wan30-thinking-switch'
           label={t('Enable thinking')}
-          description={t(
-            'Use deeper planning for better results when supported'
-          )}
-          checked={props.values.enableThinking}
-          disabled={props.disabled}
+          description={
+            thinkingRequired
+              ? t('Required for document or web page sources')
+              : t('Use deeper planning for better results when supported')
+          }
+          checked={thinkingRequired ? true : props.values.enableThinking}
+          disabled={props.disabled || thinkingRequired}
           onCheckedChange={(checked) => update('enableThinking', checked)}
         />
       </div>
