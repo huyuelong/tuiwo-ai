@@ -225,6 +225,28 @@ func TestConvertToAliRequestWan30SeedAndResolutionBilling(t *testing.T) {
 	assert.Equal(t, 1.0, ratios["resolution-480P"])
 }
 
+func TestConvertToAliRequestWan30PrimeSharesWan30Contract(t *testing.T) {
+	adaptor := &TaskAdaptor{}
+	req := relaycommon.TaskSubmitReq{
+		Model:  "wan3.0-video-prime",
+		Prompt: "高速版与标准版参数一致",
+	}
+
+	aliReq, err := adaptor.convertToAliRequest(testRelayInfo(), req)
+
+	require.NoError(t, err)
+	require.Equal(t, "wan3.0-video-prime", aliReq.Model)
+	require.Equal(t, "1080P", aliReq.Parameters.Resolution)
+	require.Equal(t, "adaptive", aliReq.Parameters.Ratio)
+	require.Equal(t, 5, aliReq.Parameters.Duration)
+	require.False(t, aliReq.Parameters.PromptExtend)
+
+	aliReq.Parameters.Resolution = "1080P"
+	ratios, err := ProcessAliOtherRatios(aliReq)
+	require.NoError(t, err)
+	assert.Equal(t, 4.0, ratios["resolution-1080P"])
+}
+
 func TestConvertToAliRequestWan30StripsNegativePrompt(t *testing.T) {
 	adaptor := &TaskAdaptor{}
 	req := relaycommon.TaskSubmitReq{

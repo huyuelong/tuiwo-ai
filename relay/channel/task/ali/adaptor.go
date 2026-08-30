@@ -289,6 +289,12 @@ func ProcessAliOtherRatios(aliReq *AliVideoRequest) (map[string]float64, error) 
 			"720P":  2,
 			"1080P": 4,
 		},
+		// 高速版
+		"wan3.0-video-prime": {
+			"480P":  1,
+			"720P":  2,
+			"1080P": 4,
+		},
 	}
 	var resolution string
 
