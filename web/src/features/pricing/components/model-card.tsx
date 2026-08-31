@@ -32,6 +32,11 @@ import {
 import { parseTags } from '../lib/filters'
 import { isTokenBasedModel } from '../lib/model-helpers'
 import { formatPrice, formatRequestPrice } from '../lib/price'
+import {
+  formatVideoTaskPriceUSD,
+  getVideoTaskBaseUnitPriceUSD,
+  isVideoTaskPricingModel,
+} from '../lib/video-task-pricing'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
@@ -65,6 +70,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const isDynamicPricing =
     props.model.billing_mode === 'tiered_expr' &&
     Boolean(props.model.billing_expr)
+  const isVideoTaskPricing = isVideoTaskPricingModel(props.model)
   const hasCachedPrice = isTokenBased && props.model.cache_ratio != null
   const dynamicSummary = isDynamicPricing
     ? getDynamicPricingSummary(props.model, {
@@ -124,6 +130,34 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       priceSummary = (
         <span className='text-muted-foreground text-sm'>
           {t('Dynamic Pricing')}
+        </span>
+      )
+    }
+  } else if (isVideoTaskPricing) {
+    const baseUnitPriceUSD = getVideoTaskBaseUnitPriceUSD(props.model)
+    const groupRatio = getDynamicDisplayGroupRatio(
+      props.model,
+      props.selectedGroup
+    )
+
+    if (baseUnitPriceUSD != null) {
+      priceSummary = (
+        <span className='text-muted-foreground whitespace-nowrap'>
+          <span className='text-foreground font-mono font-semibold'>
+            {formatVideoTaskPriceUSD(
+              baseUnitPriceUSD * groupRatio,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
+            )}
+          </span>{' '}
+          / {t('sec')} · 480P
+        </span>
+      )
+    } else {
+      priceSummary = (
+        <span className='text-muted-foreground text-sm'>
+          {t('Video duration billing')}
         </span>
       )
     }

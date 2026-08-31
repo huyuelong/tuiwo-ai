@@ -69,6 +69,11 @@ import {
 import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
+import {
+  formatVideoTaskPriceUSD,
+  getVideoTaskGroupBaseUnitPriceUSD,
+  isVideoTaskPricingModel,
+} from '../lib/video-task-pricing'
 import type {
   ModelCapability,
   PriceType,
@@ -77,6 +82,7 @@ import type {
 } from '../types'
 import { DynamicPricingBreakdown } from './dynamic-pricing-breakdown'
 import { ModelBillingModeBadge } from './model-billing-mode-badge'
+import { VideoTaskPricingBreakdown } from './video-task-pricing-breakdown'
 import { ModelDetailsApi } from './model-details-api'
 import { ModelDetailsPerformance } from './model-details-performance'
 
@@ -574,6 +580,7 @@ function PriceSection(props: {
   showRechargePrice: boolean
 }) {
   const { t } = useTranslation()
+  const isVideoTaskPricing = isVideoTaskPricingModel(props.model)
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = props.tokenUnit === 'K' ? '1K' : '1M'
   const baseGroupKey = '_base'
@@ -698,6 +705,21 @@ function PriceSection(props: {
             </div>
           </div>
         )}
+      </section>
+    )
+  }
+
+  if (isVideoTaskPricing) {
+    return (
+      <section>
+        <SectionTitle>{t('Base Price')}</SectionTitle>
+        <VideoTaskPricingBreakdown
+          model={props.model}
+          groupRatio={1}
+          showRechargePrice={props.showRechargePrice}
+          priceRate={props.priceRate}
+          usdExchangeRate={props.usdExchangeRate}
+        />
       </section>
     )
   }
@@ -868,6 +890,7 @@ function GroupPricingSection(props: {
   )
 
   const isTokenBased = isTokenBasedModel(props.model)
+  const isVideoTaskPricing = isVideoTaskPricingModel(props.model)
   const tokenUnitLabel = props.tokenUnit === 'K' ? '1K' : '1M'
 
   const extraPriceTypes = useMemo(() => {
@@ -1041,6 +1064,60 @@ function GroupPricingSection(props: {
       props.usdExchangeRate,
       props.groupRatio
     )
+
+  if (isVideoTaskPricing) {
+    return (
+      <section>
+        <SectionTitle>{t('Pricing by Group')}</SectionTitle>
+        <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
+        <StaticDataTable
+          className='-mx-4 rounded-none border-0 sm:mx-0'
+          tableClassName='text-sm'
+          headerRowClassName='hover:bg-transparent'
+          data={availableGroups}
+          getRowKey={(group) => group}
+          columns={[
+            {
+              id: 'group',
+              header: t('Group'),
+              className: thClass,
+              cellClassName: 'py-2.5',
+              cell: (group) => <GroupBadge group={group} size='sm' />,
+            },
+            {
+              id: 'ratio',
+              header: t('Ratio'),
+              className: thClass,
+              cellClassName: 'text-muted-foreground py-2.5 font-mono',
+              cell: (group) => `${props.groupRatio[group] || 1}x`,
+            },
+            {
+              id: 'base-unit',
+              header: t('480P / sec'),
+              className: `${thClass} text-right`,
+              cellClassName: 'py-2.5 text-right font-mono',
+              cell: (group) => {
+                const base = getVideoTaskGroupBaseUnitPriceUSD({
+                  model: props.model,
+                  group,
+                  groupRatio: props.groupRatio,
+                })
+                if (base == null) {
+                  return '-'
+                }
+                return formatVideoTaskPriceUSD(
+                  base,
+                  showRechargePrice,
+                  props.priceRate,
+                  props.usdExchangeRate
+                )
+              },
+            },
+          ]}
+        />
+      </section>
+    )
+  }
 
   return (
     <section>
